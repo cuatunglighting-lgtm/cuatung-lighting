@@ -1,8 +1,5 @@
-/* CUATUNG LIGHTING – production config. */
 window.APP_CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbyyVkl80KzBSBhuTf4RGNPD9eltEYCXCOIYlQ9_yA_XJgcVEOS0a7Q4FDiszrnPRxlBdg/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbw0ObFpu71nokhmrVCftpojd_Ef8ZNw1z4y8RRw5ejIu72KP8rcVblVT-64iMFZ7t07/exec',
   APP_NAME: 'CUATUNG LIGHTING – QUẢN LÝ CHẤM CÔNG',
-  VERSION: '7.0.0',
-  BUILD: '2026-10-06-01',
-  CACHE_VERSION: 'cuatung-v7-20261006-01'
+  VERSION: '7.1.1'
 };
