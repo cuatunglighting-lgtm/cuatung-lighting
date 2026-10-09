@@ -47,3 +47,8 @@ body,button,input,select,textarea{font-size:16px}button,input,select,textarea{fo
 /* Day-shift UI: a full-day shift is a fixed 1 workday, without time/tolerance/status controls. */
 .shift-card.day-shift .shift-tolerances,
 .shift-card.day-shift .shift-status-field{display:none!important}
+
+/* V7.6.9: day-shift rules */
+.shift-card.day-shift .shift-tolerances,.shift-card.day-shift .shift-status-field{display:none!important}
+.shift-card.day-shift .shift-times{opacity:.75}
+.shift-card.day-shift .shift-start:disabled,.shift-card.day-shift .shift-end:disabled{background:#eef2f7;color:#718096}
