@@ -48,10 +48,7 @@ body,button,input,select,textarea{font-size:16px}button,input,select,textarea{fo
 .shift-card.day-shift .shift-tolerances,
 .shift-card.day-shift .shift-status-field{display:none!important}
 
-/* V8.0.0: day-shift rules */
+/* V7.6.9: day-shift rules */
 .shift-card.day-shift .shift-tolerances,.shift-card.day-shift .shift-status-field{display:none!important}
 .shift-card.day-shift .shift-times{opacity:.75}
 .shift-card.day-shift .shift-start:disabled,.shift-card.day-shift .shift-end:disabled{background:#eef2f7;color:#718096}
-
-/* V8.0.0 admin home notification panel */
-.admin-notice-panel{margin:0 0 18px;border-left:4px solid var(--blue,#2563eb)}.admin-notice-item{padding:12px 0;border-top:1px solid #e7edf3}.admin-notice-item p{margin:7px 0 10px;line-height:1.45}.bell-count{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 4px;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:900;vertical-align:top;margin-left:-4px}
