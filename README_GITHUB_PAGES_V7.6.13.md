@@ -1,4 +1,4 @@
-# GitHub Pages deployment — V7.6.13
+# GitHub Pages deployment — V7.6.14
 
 Upload the contents of this ZIP to the repository's **root** so `index.html`, `app.js`, `config.js`, `style.css`, `sw.js`, `manifest.json`, and `assets/` are directly at repository root.
 
