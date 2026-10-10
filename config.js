@@ -1,5 +1,5 @@
 window.APP_CONFIG={
-  API_URL:'https://script.google.com/macros/s/AKfycbw0ObFpu71nokhmrVCftpojd_Ef8ZNw1z4y8RRw5ejIu72KP8rcVblVT-64iMFZ7t07/exec',
+  API_URL:'https://script.google.com/macros/s/AKfycbxQMgVGGkADnTaU3Xksscw5cAdn_XR1wwYHBJsnwG01hFAyKFoQ-A0w8YYlIRj0JVdn/exec',
   APP_NAME:'CUATUNG LIGHTING – QUẢN LÝ CHẤM CÔNG',
-  VERSION:'8.0.0'
+  VERSION:'9.0.0'
 };

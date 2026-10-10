@@ -1,4 +1,4 @@
-const CACHE='cuatung-lighting-v8.0.0-shell';
+const CACHE='cuatung-lighting-v9.0.0-shell';
 const ASSETS=['./','./index.html','./style.css','./app.js','./config.js','./manifest.json','./assets/logo.png','./assets/icon-192x192.png','./assets/icon-512x512.png','./assets/apple-touch-icon.png','./assets/favicon-32.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

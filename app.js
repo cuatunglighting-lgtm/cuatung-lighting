@@ -204,5 +204,14 @@ window.renderUserHome=renderUserHome;window.renderAttendance=renderAttendance;wi
 window.adminProjects__=adminProjects;window.adminProjects_=()=>adminProjects();window.adminReports__=adminReports;window.adminReports_=()=>adminReports();window.adminShifts__=adminShifts;window.adminShifts_=()=>adminShifts();window.adminMakeup__=adminMakeup;window.adminMakeup_=()=>adminMakeup();window.adminAssignments__=adminAssignments;window.adminAssignments_=()=>adminAssignments();
 window.saveProject__=saveProject;window.saveShift__=saveShift;window.saveShiftRow__=saveShiftRow;window.saveMakeup__=saveMakeup;window.saveAssignment__=saveAssignment;
 window.addEventListener('error',ev=>{try{console.error('[CUATUNG '+A.VERSION+'] JS error',ev.message,ev.filename,ev.lineno)}catch(_){}});
+
+// V9 compatibility aliases: keep old navigation callback names callable.
+window.adminProjects_ = window.adminProjects_ || (() => typeof adminProjects === 'function' ? adminProjects() : Promise.reject(new Error('Hàm adminProjects chưa được khởi tạo')));
+window.adminProjects__ = window.adminProjects__ || window.adminProjects_;
+window.adminReports_ = window.adminReports_ || (() => typeof adminReports === 'function' ? adminReports() : Promise.reject(new Error('Hàm adminReports chưa được khởi tạo')));
+window.adminReports__ = window.adminReports__ || window.adminReports_;
+window.adminShifts_ = window.adminShifts_ || (() => typeof adminShifts === 'function' ? adminShifts() : Promise.reject(new Error('Hàm adminShifts chưa được khởi tạo')));
+window.adminShifts__ = window.adminShifts__ || window.adminShifts_;
+
 start();
 })();
