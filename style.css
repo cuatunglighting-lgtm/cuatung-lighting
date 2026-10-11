@@ -52,3 +52,5 @@ body,button,input,select,textarea{font-size:16px}button,input,select,textarea{fo
 .shift-card.day-shift .shift-tolerances,.shift-card.day-shift .shift-status-field{display:none!important}
 .shift-card.day-shift .shift-times{opacity:.75}
 .shift-card.day-shift .shift-start:disabled,.shift-card.day-shift .shift-end:disabled{background:#eef2f7;color:#718096}
+
+.top-reset{width:44px;height:44px;border:0;border-radius:50%;background:#e7f4ec;color:#167647;font-size:27px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.10);cursor:pointer}.top-reset.hidden{display:none}.top-reset:disabled{opacity:.55}.top-reset.busy{animation:clspin 1s linear infinite}@keyframes clspin{to{transform:rotate(360deg)}}
