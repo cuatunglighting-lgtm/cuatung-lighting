@@ -54,3 +54,11 @@ body,button,input,select,textarea{font-size:16px}button,input,select,textarea{fo
 .shift-card.day-shift .shift-start:disabled,.shift-card.day-shift .shift-end:disabled{background:#eef2f7;color:#718096}
 
 .top-reset{width:44px;height:44px;border:0;border-radius:50%;background:#e7f4ec;color:#167647;font-size:27px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.10);cursor:pointer}.top-reset.hidden{display:none}.top-reset:disabled{opacity:.55}.top-reset.busy{animation:clspin 1s linear infinite}@keyframes clspin{to{transform:rotate(360deg)}}
+
+
+/* V10.1.0: immediate touch feedback without changing existing layout */
+button,.btn,[role=button],.menu-card,.icon-btn,.top-power,.top-reset{ -webkit-tap-highlight-color: rgba(20,105,190,.16); transition: filter .12s ease, transform .12s ease, box-shadow .12s ease, background-color .12s ease; touch-action: manipulation; }
+button:active,.btn:active,[role=button]:active,.menu-card:active,.icon-btn:active,.top-power:active,.top-reset:active{ filter: brightness(.90); transform: translateY(1px) scale(.99); box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); }
+button:focus-visible,.btn:focus-visible,[role=button]:focus-visible{outline:3px solid rgba(32,116,210,.55);outline-offset:2px}
+button:disabled,.btn:disabled{cursor:not-allowed;filter:saturate(.55);opacity:.68}
+@media(prefers-reduced-motion:reduce){button,.btn,[role=button],.menu-card,.icon-btn,.top-power,.top-reset{transition:none!important}}
