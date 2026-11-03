@@ -40,6 +40,41 @@ async function apiRequest(action,payload={}){
   }
   throw lastError||Error('Không kết nối được Apps Script.');
 }
+
+// OneSignal Web SDK v16 integration. Push is optional and never blocks app login/attendance.
+let oneSignalReady = false;
+function initOneSignalForUser(){
+  if(!A.ONESIGNAL_APP_ID || !me || !me.EMPLOYEE_ID || !window.OneSignalDeferred) return;
+  window.OneSignalDeferred.push(async function(OneSignal){
+    try{
+      if(!oneSignalReady){
+        await OneSignal.init({appId:A.ONESIGNAL_APP_ID,serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}});
+        oneSignalReady=true;
+      }
+      await OneSignal.login(String(me.EMPLOYEE_ID));
+      const b=$('pushEnableBtn'); if(b)b.classList.remove('hidden');
+      if(OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.optedIn){if(b)b.textContent='🔔';}
+    }catch(err){console.warn('[OneSignal] init/login:',err);}
+  });
+}
+async function enablePushNotifications(){
+  if(!me || !me.EMPLOYEE_ID){toast('Vui lòng đăng nhập trước.');return;}
+  if(!window.OneSignalDeferred){toast('OneSignal SDK chưa tải xong. Thử tải lại ứng dụng.');return;}
+  window.OneSignalDeferred.push(async function(OneSignal){
+    try{
+      if(!oneSignalReady){await OneSignal.init({appId:A.ONESIGNAL_APP_ID,serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}});oneSignalReady=true;}
+      await OneSignal.login(String(me.EMPLOYEE_ID));
+      const permission=await OneSignal.Notifications.requestPermission();
+      if(permission){await OneSignal.User.PushSubscription.optIn();toast('Đã gửi yêu cầu bật thông báo. Kiểm tra trạng thái đăng ký thiết bị.');}
+      else toast('Anh/chị chưa cấp quyền thông báo cho CUATUNG.');
+    }catch(err){console.error('[OneSignal] opt-in:',err);toast('Chưa bật được thông báo: '+(err.message||err));}
+  });
+}
+async function logoutOneSignal(){
+  if(!window.OneSignalDeferred)return;
+  window.OneSignalDeferred.push(async function(OneSignal){try{if(oneSignalReady)await OneSignal.logout();}catch(err){console.warn('[OneSignal] logout:',err);}});
+}
+
 function applyBootstrap(j){if(!j)return;S.projects=j.projects||[];S.shifts=j.shifts||[];S.attendance=j.attendance||[];S.assignments=j.assignments||[];S.unread=j.unread||[];S.notifications=(j.notifications||S.notifications||[]).slice(0,10);S.attendanceShift=j.attendanceShift||null;me=j.me||me;saveSession()}
 function saveSnapshot(j){try{LS.setItem('cl_bootstrap',JSON.stringify({at:Date.now(),data:j}))}catch(e){}}
 function readSnapshot(){try{const x=JSON.parse(LS.getItem('cl_bootstrap')||'null');return x&&x.data?x:null}catch(e){return null}}
@@ -50,10 +85,10 @@ function clearSession(){token='';me=null;LS.removeItem('cl_token');LS.removeItem
 function renderLogin(status='Sẵn sàng đăng nhập'){screen='login';setPowerVisible(false);page(`<section class="screen wrap login-screen"><div class="login"><img class="login-logo" src="assets/logo.png" alt="Cuatung Lighting"><div class="login-heading"><h1 class="title">QUẢN LÝ CHẤM CÔNG</h1><div class="company-name">Cuatung Lighting</div></div><form id="loginForm"><div class="field"><label>Số điện thoại</label><input id="phone" inputmode="tel" autocomplete="username" value="${esc(LS.getItem('cl_phone')||'')}" required></div><div class="field"><label>Mật khẩu</label><input id="password" type="password" autocomplete="current-password" required></div><button id="loginBtn" class="btn primary full" type="submit">ĐĂNG NHẬP</button><p id="loginStatus" class="helper">${esc(status)}</p></form></div></section>`);$('loginForm').onsubmit=doLogin}
 async function doLogin(e){
   e.preventDefault();const b=$('loginBtn'),st=$('loginStatus');b.disabled=true;st.textContent='Đang xác thực…';
-  try{const j=await api('login',{phone:$('phone').value,password:$('password').value});token=j.token;me=j.me;saveSession();if(j.forcePasswordChange){showChangePassword(true);return}showHome();st.textContent='Đăng nhập thành công.';setNet(true);bootstrap().then(()=>{saveSnapshot(S);showUnread();syncQueue()}).catch(err=>{toast('Đang tải dữ liệu nền…');setNet(false)})}catch(err){st.textContent='LỖI: '+err.message;setNet(false)}finally{b.disabled=false}}
+  try{const j=await api('login',{phone:$('phone').value,password:$('password').value});token=j.token;me=j.me;saveSession();initOneSignalForUser();if(j.forcePasswordChange){showChangePassword(true);return}showHome();st.textContent='Đăng nhập thành công.';setNet(true);bootstrap().then(()=>{saveSnapshot(S);showUnread();syncQueue()}).catch(err=>{toast('Đang tải dữ liệu nền…');setNet(false)})}catch(err){st.textContent='LỖI: '+err.message;setNet(false)}finally{b.disabled=false}}
 async function bootstrap(){const j=await api('bootstrap');applyBootstrap(j);saveSnapshot(j);return j}
 
-function showHome(){setPowerVisible(!!me);if(me)startGpsPrefetch();if(me&&me.ROLE==='ADMIN')renderAdminHome();else renderUserHome()}
+function showHome(){if(me)initOneSignalForUser();const pb=$('pushEnableBtn');if(pb)pb.classList.toggle('hidden',!me);setPowerVisible(!!me);if(me)startGpsPrefetch();if(me&&me.ROLE==='ADMIN')renderAdminHome();else renderUserHome()}
 function backHome(){showHome()}
 function renderUserHome(){screen='userHome';page(`<section class="screen wrap"><div class="home-head"><div><div class="user-name">${esc(me?.NAME||'')}</div><div class="user-role">NHÂN VIÊN</div></div><div class="icon-actions"><button class="icon-btn" onclick="renderNotifications()">🔔</button></div></div><div class="grid">${menu('📍','CHẤM CÔNG','VÀO / RA CA','renderAttendance()')}${menu('📊','THỐNG KÊ CÔNG / PHÉP','NGÀY / THÁNG','renderStats()')}${menu('📋','CÔNG VIỆC','PHÂN CÔNG CỦA TÔI','renderWork()')}${menu('📝','BÁO PHÉP','NHIỀU NGÀY / CA','renderLeave()')}${menu('🧭','CHẤM CÔNG KHÁC','CÔNG TRÌNH LẺ','renderOtherAttendance()')}${menu('🕘','LỊCH SỬ','CHẤM CÔNG','renderHistory()')}</div></section>`)}
 function menu(i,t,s,fn){return `<button class="menu-card" onclick="${fn}"><span class="ico">${i}</span>${t}<small>${s}</small></button>`}
@@ -234,7 +269,7 @@ function showChangePassword(force){adminShell('ĐỔI MẬT KHẨU',`<div class=
 async function changePassword(){if($('cp1').value!==$('cp2').value)return toast('Hai mật khẩu không khớp.');try{await api('changePassword',{newPassword:$('cp1').value});await bootstrap();showHome()}catch(e){toast(e.message)}}
 async function resetAndSync(){const b=$('topReset');if(b){b.disabled=true;b.classList.add('busy')}try{if(navigator.onLine&&token){await syncQueue();const j=await bootstrap();applyBootstrap(j);saveSnapshot(j);if(screen==='attendance'||screen==='otherAttendance')renderAttendance(screen==='otherAttendance',false);else if(screen==='userHome'||screen==='adminHome')showHome();await refreshUnread();toast('Đã tải lại trạng thái và kiểm tra hàng đợi đồng bộ.')}else{const snap=readSnapshot();if(snap)applyBootstrap(snap.data);toast('Đang ngoại tuyến: giữ nguyên dữ liệu cục bộ, sẽ đồng bộ khi có mạng.')}}catch(e){toast('Chưa làm mới được: '+e.message)}finally{if(b){b.disabled=false;b.classList.remove('busy')}}}
 function requestLogout(){$('modalTitle').textContent='ĐĂNG XUẤT';$('modalText').textContent='Bạn có chắc muốn đăng xuất khỏi tài khoản này?';$('modalCancel').textContent='HỦY';$('modalOk').textContent='ĐĂNG XUẤT';$('modal').classList.remove('hidden');$('modalOk').onclick=async()=>{ $('modal').classList.add('hidden'); await doLogout() };$('modalCancel').onclick=()=>{$('modal').classList.add('hidden')}} 
-async function doLogout(){const revoke=token?api('logout').catch(()=>null):Promise.resolve(null);clearSession();renderLogin('Đã đăng xuất khỏi thiết bị.');await Promise.race([revoke,new Promise(resolve=>setTimeout(resolve,350))])}
+async function doLogout(){logoutOneSignal();const revoke=token?api('logout').catch(()=>null):Promise.resolve(null);clearSession();renderLogin('Đã đăng xuất khỏi thiết bị.');await Promise.race([revoke,new Promise(resolve=>setTimeout(resolve,350))])}
 async function restore(){
   renderLogin();if(!token||!me)return;const snap=readSnapshot();
   if(snap&&snap.data)applyBootstrap(snap.data);
