@@ -41,38 +41,109 @@ async function apiRequest(action,payload={}){
   throw lastError||Error('Không kết nối được Apps Script.');
 }
 
-// OneSignal Web SDK v16 integration. Push is optional and never blocks app login/attendance.
+// OneSignal Web SDK v16: a single shared initialization promise prevents concurrent init calls.
 let oneSignalReady = false;
-function initOneSignalForUser(){
-  if(!A.ONESIGNAL_APP_ID || !me || !me.EMPLOYEE_ID || !window.OneSignalDeferred) return;
-  window.OneSignalDeferred.push(async function(OneSignal){
-    try{
-      if(!oneSignalReady){
-        await OneSignal.init({appId:A.ONESIGNAL_APP_ID,serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}});
-        oneSignalReady=true;
-      }
-      await OneSignal.login(String(me.EMPLOYEE_ID));
-      const b=$('pushEnableBtn'); if(b)b.classList.remove('hidden');
-      if(OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.optedIn){if(b)b.textContent='🔔';}
-    }catch(err){console.warn('[OneSignal] init/login:',err);}
+let oneSignalInitPromise = null;
+let oneSignalClientPromise = null;
+let oneSignalCurrentExternalId = '';
+let oneSignalInstance = null;
+function getOneSignalClient(){
+  if(oneSignalClientPromise)return oneSignalClientPromise;
+  if(!A.ONESIGNAL_APP_ID)return Promise.reject(Error('Thiếu ONESIGNAL_APP_ID trong config.js.'));
+  if(!window.OneSignalDeferred)return Promise.reject(Error('OneSignal SDK chưa được nạp. Hãy tải lại ứng dụng.'));
+  oneSignalClientPromise=new Promise((resolve,reject)=>{
+    window.OneSignalDeferred.push(async function(OneSignal){
+      try{
+        if(!oneSignalInitPromise){
+          oneSignalInitPromise=Promise.resolve(OneSignal.init({
+            appId:A.ONESIGNAL_APP_ID,
+            serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',
+            serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',
+            serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}
+          })).then(()=>{oneSignalReady=true;return OneSignal}).catch(err=>{oneSignalInitPromise=null;throw err});
+        }
+        await oneSignalInitPromise;
+        oneSignalInstance=OneSignal;
+        resolve(OneSignal);
+      }catch(err){oneSignalClientPromise=null;reject(err)}
+    });
   });
+  return oneSignalClientPromise;
+}
+async function loginOneSignalForCurrentUser(){
+  if(!me||!me.EMPLOYEE_ID)return null;
+  const externalId=String(me.EMPLOYEE_ID);
+  const OneSignal=await getOneSignalClient();
+  if(oneSignalCurrentExternalId!==externalId){await OneSignal.login(externalId);oneSignalCurrentExternalId=externalId;}
+  updatePushButtonState(OneSignal);
+  return OneSignal;
+}
+function updatePushButtonState(OneSignal){
+  const b=$('pushEnableBtn');if(!b)return;
+  b.classList.remove('hidden');
+  const sub=OneSignal&&OneSignal.User&&OneSignal.User.PushSubscription;
+  const opted=!!(sub&&sub.optedIn);
+  b.textContent=opted?'🔔✓':'🔔';
+  b.title=opted?'Thông báo đẩy đã bật':'Bật thông báo đẩy';
+  b.setAttribute('aria-label',b.title);
+  b.dataset.pushState=opted?'enabled':'disabled';
+}
+function initOneSignalForUser(){
+  if(!A.ONESIGNAL_APP_ID||!me||!me.EMPLOYEE_ID)return;
+  loginOneSignalForCurrentUser().catch(err=>console.warn('[OneSignal] init/login:',err));
 }
 async function enablePushNotifications(){
-  if(!me || !me.EMPLOYEE_ID){toast('Vui lòng đăng nhập trước.');return;}
-  if(!window.OneSignalDeferred){toast('OneSignal SDK chưa tải xong. Thử tải lại ứng dụng.');return;}
-  window.OneSignalDeferred.push(async function(OneSignal){
-    try{
-      if(!oneSignalReady){await OneSignal.init({appId:A.ONESIGNAL_APP_ID,serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}});oneSignalReady=true;}
-      await OneSignal.login(String(me.EMPLOYEE_ID));
-      const permission=await OneSignal.Notifications.requestPermission();
-      if(permission){await OneSignal.User.PushSubscription.optIn();toast('Đã gửi yêu cầu bật thông báo. Kiểm tra trạng thái đăng ký thiết bị.');}
-      else toast('Anh/chị chưa cấp quyền thông báo cho CUATUNG.');
-    }catch(err){console.error('[OneSignal] opt-in:',err);toast('Chưa bật được thông báo: '+(err.message||err));}
-  });
+  const b=$('pushEnableBtn');
+  if(!me||!me.EMPLOYEE_ID){toast('Vui lòng đăng nhập trước.');return}
+  if(!('Notification'in window)||!('serviceWorker'in navigator)){toast('Trình duyệt này chưa hỗ trợ thông báo đẩy.');return}
+  if(/iPhone|iPad|iPod/i.test(navigator.userAgent)&&!navigator.standalone&&!window.matchMedia('(display-mode: standalone)').matches){toast('Trên iPhone, hãy thêm CUATUNG vào Màn hình chính rồi mở ứng dụng để bật thông báo.');return}
+  // Permission prompt must be invoked synchronously from the tap gesture on iOS.
+  // If SDK init/login has not completed yet, prepare it and ask the user to tap again.
+  if(!oneSignalReady||!oneSignalInstance){
+    if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
+    try{await loginOneSignalForCurrentUser();toast('OneSignal đã sẵn sàng. Anh/chị nhấn chuông thêm một lần để cấp quyền thông báo.');}
+    catch(err){toast('Chưa khởi tạo được OneSignal: '+(err.message||err));}
+    finally{if(b){b.disabled=false;b.removeAttribute('aria-busy')}}
+    return;
+  }
+  if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
+  try{
+    const OneSignal=oneSignalInstance;
+    const externalId=String(me.EMPLOYEE_ID);
+    const loginPromise=oneSignalCurrentExternalId===externalId?Promise.resolve():OneSignal.login(externalId);
+    // Start the native permission request before the first await to preserve user activation.
+    const permissionPromise=Notification.permission==='granted'?Promise.resolve(true):OneSignal.Notifications.requestPermission();
+    await loginPromise;oneSignalCurrentExternalId=externalId;
+    const permission=await permissionPromise;
+    if(permission!==true&&permission!=='granted'&&Notification.permission!=='granted'){
+      updatePushButtonState(OneSignal);
+      toast('Thông báo chưa được cấp quyền. Hãy cho phép thông báo trong cài đặt trình duyệt.');
+      return;
+    }
+    await OneSignal.User.PushSubscription.optIn();
+    const sub=OneSignal.User&&OneSignal.User.PushSubscription;
+    const deadline=Date.now()+10000;
+    while(sub&&(!sub.id||!sub.optedIn)&&Date.now()<deadline)await new Promise(r=>setTimeout(r,250));
+    updatePushButtonState(OneSignal);
+    if(sub&&sub.id&&sub.optedIn)toast('Đã bật thông báo đẩy cho tài khoản này.');
+    else toast('Đã cấp quyền nhưng thiết bị chưa xác nhận đăng ký Push. Kiểm tra kết nối và thử lại.');
+  }catch(err){
+    console.error('[OneSignal] opt-in:',err);
+    toast('Chưa bật được thông báo: '+(err.message||err));
+  }finally{if(b){b.disabled=false;b.removeAttribute('aria-busy')}}
 }
 async function logoutOneSignal(){
-  if(!window.OneSignalDeferred)return;
-  window.OneSignalDeferred.push(async function(OneSignal){try{if(oneSignalReady)await OneSignal.logout();}catch(err){console.warn('[OneSignal] logout:',err);}});
+  try{
+    if(!oneSignalReady)return;
+    const OneSignal=await getOneSignalClient();
+    await OneSignal.logout();
+    oneSignalCurrentExternalId='';
+  }catch(err){console.warn('[OneSignal] logout:',err)}
+}
+function togglePasswordVisibility(id,button){
+  const input=$(id);if(!input)return;
+  const show=input.type==='password';input.type=show?'text':'password';
+  if(button){button.textContent=show?'ẨN':'HIỆN';button.setAttribute('aria-pressed',show?'true':'false');button.setAttribute('aria-label',show?'Ẩn mật khẩu':'Hiện mật khẩu')}
 }
 
 function applyBootstrap(j){if(!j)return;S.projects=j.projects||[];S.shifts=j.shifts||[];S.attendance=j.attendance||[];S.assignments=j.assignments||[];S.unread=j.unread||[];S.notifications=(j.notifications||S.notifications||[]).slice(0,10);S.attendanceShift=j.attendanceShift||null;me=j.me||me;saveSession()}
@@ -82,7 +153,7 @@ function clearSnapshot(){LS.removeItem('cl_bootstrap')}
 function saveSession(){if(!token||!me)return;LS.setItem('cl_token',token);LS.setItem('cl_me',JSON.stringify(me));LS.setItem('cl_phone',me.PHONE||'')}
 function setPowerVisible(show){const b=$('topPower'),r=$('topReset');if(b)b.classList.toggle('hidden',!show);if(r)r.classList.toggle('hidden',!show)}
 function clearSession(){token='';me=null;LS.removeItem('cl_token');LS.removeItem('cl_me');SS.removeItem('cl_token');SS.removeItem('cl_me');clearSnapshot();setPowerVisible(false)}
-function renderLogin(status='Sẵn sàng đăng nhập'){screen='login';setPowerVisible(false);page(`<section class="screen wrap login-screen"><div class="login"><img class="login-logo" src="assets/logo.png" alt="Cuatung Lighting"><div class="login-heading"><h1 class="title">QUẢN LÝ CHẤM CÔNG</h1><div class="company-name">Cuatung Lighting</div></div><form id="loginForm"><div class="field"><label>Số điện thoại</label><input id="phone" inputmode="tel" autocomplete="username" value="${esc(LS.getItem('cl_phone')||'')}" required></div><div class="field"><label>Mật khẩu</label><input id="password" type="password" autocomplete="current-password" required></div><button id="loginBtn" class="btn primary full" type="submit">ĐĂNG NHẬP</button><p id="loginStatus" class="helper">${esc(status)}</p></form></div></section>`);$('loginForm').onsubmit=doLogin}
+function renderLogin(status='Sẵn sàng đăng nhập'){screen='login';setPowerVisible(false);page(`<section class="screen wrap login-screen"><div class="login"><img class="login-logo" src="assets/logo.png" alt="Cuatung Lighting"><div class="login-heading"><h1 class="title">QUẢN LÝ CHẤM CÔNG</h1><div class="company-name">Cuatung Lighting</div></div><form id="loginForm"><div class="field"><label>Số điện thoại</label><input id="phone" inputmode="tel" autocomplete="username" value="${esc(LS.getItem('cl_phone')||'')}" required></div><div class="field"><label for="password">Mật khẩu</label><div class="password-wrap"><input id="password" type="password" autocomplete="current-password" required><button class="password-toggle" type="button" onclick="togglePasswordVisibility('password',this)" aria-label="Hiện mật khẩu" aria-pressed="false">HIỆN</button></div></div><button id="loginBtn" class="btn primary full" type="submit">ĐĂNG NHẬP</button><p id="loginStatus" class="helper">${esc(status)}</p></form></div></section>`);$('loginForm').onsubmit=doLogin}
 async function doLogin(e){
   e.preventDefault();const b=$('loginBtn'),st=$('loginStatus');b.disabled=true;st.textContent='Đang xác thực…';
   try{const j=await api('login',{phone:$('phone').value,password:$('password').value});token=j.token;me=j.me;saveSession();initOneSignalForUser();if(j.forcePasswordChange){showChangePassword(true);return}showHome();st.textContent='Đăng nhập thành công.';setNet(true);bootstrap().then(()=>{saveSnapshot(S);showUnread();syncQueue()}).catch(err=>{toast('Đang tải dữ liệu nền…');setNet(false)})}catch(err){st.textContent='LỖI: '+err.message;setNet(false)}finally{b.disabled=false}}
@@ -105,14 +176,16 @@ let gpsCache=null,gpsPrefetchPromise=null;const GPS_ATTEMPT_KEY='cl_gps_permissi
 function updateNearestProject(coords){if(!coords||!S.projects.length)return;let best=null,bd=Infinity;S.projects.forEach(p=>{const lat=Number(p.LAT),lng=Number(p.LNG);if(!Number.isFinite(lat)||!Number.isFinite(lng))return;const d=geo(coords.latitude,coords.longitude,lat,lng);if(d<bd){bd=d;best=p}});if(best&&$('projectSelect'))$('projectSelect').value=best.PROJECT_ID}
 function startGpsPrefetch(force=false){if(!navigator.geolocation||gpsPrefetchPromise)return gpsPrefetchPromise||Promise.resolve(null);let state=LS.getItem(GPS_STATE_KEY)||'';let attempted=LS.getItem(GPS_ATTEMPT_KEY)==='1';if(!force&&attempted&&state==='denied')return Promise.resolve(null);LS.setItem(GPS_ATTEMPT_KEY,'1');gpsPrefetchPromise=new Promise(resolve=>navigator.geolocation.getCurrentPosition(pos=>{gpsCache={latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy:pos.coords.accuracy,timestamp:Date.now()};LS.setItem(GPS_STATE_KEY,'granted');updateNearestProject(gpsCache);resolve(gpsCache)},err=>{LS.setItem(GPS_STATE_KEY,err&&err.code===1?'denied':'unavailable');resolve(null)},{enableHighAccuracy:true,timeout:3000,maximumAge:120000})).finally(()=>{gpsPrefetchPromise=null});return gpsPrefetchPromise}
 function selectNearestProject(){if(gpsCache&&Date.now()-gpsCache.timestamp<300000){updateNearestProject(gpsCache);return}startGpsPrefetch().then(updateNearestProject).catch(()=>{})}
+// Use the already-prefetched fix immediately; attendance never waits for a new GPS request.
+function gpsFieldsForAttendance(){const g=gpsCache;if(!g||!Number.isFinite(g.latitude)||!Number.isFinite(g.longitude)||Date.now()-g.timestamp>300000)return{lat:'',lng:'',accuracy:0,gpsCaptured:false};return{lat:g.latitude,lng:g.longitude,accuracy:Number(g.accuracy||0),gpsCaptured:true,gpsTimestamp:g.timestamp}}
 function geo(a,b,c,d){const R=6371000,r=x=>x*Math.PI/180,da=r(c-a),db=r(d-b),q=Math.sin(da/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(db/2)**2;return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q))}
 function getLocation(fresh=false){return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(Error('GPS không khả dụng'));const state=LS.getItem(GPS_STATE_KEY)||'';if(state==='denied')return reject(Error('Quyền vị trí đang bị chặn. Hãy bật Vị trí cho trình duyệt trong Cài đặt; ứng dụng không hỏi lại liên tục.'));navigator.geolocation.getCurrentPosition(p=>{gpsCache={latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy,timestamp:Date.now()};LS.setItem(GPS_STATE_KEY,'granted');resolve(p.coords)},e=>{if(e&&e.code===1)LS.setItem(GPS_STATE_KEY,'denied');reject(Error(e&&e.code===1?'Quyền vị trí bị từ chối':'GPS không khả dụng'))}, {enableHighAccuracy:!!fresh,timeout:3000,maximumAge:fresh?0:120000})})}
 let attendanceBusy=false;
 function pendingEvent(action,fields){const key='cl_pending_'+action;try{const old=JSON.parse(LS.getItem(key)||'null');if(old&&old.workDate===fields.workDate&&old.shiftId===fields.shiftId&&old.projectId===fields.projectId)return old; }catch(_){}const e={...fields,eventId:'EVT_'+crypto.randomUUID().replaceAll('-',''),action,eventTime:localTime()};LS.setItem(key,JSON.stringify(e));return e}
 function clearPendingEvent(action){try{LS.removeItem('cl_pending_'+action)}catch(_){}}
-async function checkin(other=false){if(attendanceBusy)return toast('Đang xử lý lượt chấm công trước đó. Vui lòng đợi kết quả.');const custom=!!other;const projectName=custom?String($('otherProjectName')?.value||'').trim():'';const projectId=custom?('OTHER:'+encodeURIComponent(projectName)):String($('projectSelect')?.value||'');if(custom&&!projectName)return toast('Nhập tên công trình lẻ.');if(!custom&&!projectId)return toast('Chưa có công trình để chọn.');const sh=currentShift();if(!sh)return toast('Chưa đến khung giờ chấm ca hoặc chưa có ca hoạt động.');if(S.attendanceShift&&!S.attendanceShift.eligible)return toast(S.attendanceShift.reason||'Chưa đến giờ chấm ca.');attendanceBusy=true;const btn=document.querySelector('.attendance-btn');if(btn){btn.disabled=true;btn.classList.add('busy');btn.textContent='ĐANG GHI NHẬN…'}const hint=$('shiftHint');if(hint)hint.textContent='Đang ghi nhận chấm công. GPS được cập nhật sau thao tác (tối đa 3 giây).';try{const workDate=sh.SHIFT_WORK_DATE||localDate();const payload=pendingEvent('CHECKIN',{projectId,shiftId:sh.SHIFT_ID,workDate,lat:'',lng:'',accuracy:0});const c={lat:'',lng:'',accuracy:0};Object.assign(payload,c);if(custom){payload.otherProject=true;payload.projectName=projectName}if(!navigator.onLine){await queueEvent({action:'CHECKIN',...payload});toast('Đã lưu VÀO CA offline. Sẽ đồng bộ khi có mạng.');return}const q=await api('checkinPreview',payload);if(q.duplicate){clearPendingEvent('CHECKIN');renderAttendance(custom,false);setTimeout(()=>bootstrap().then(j=>{applyBootstrap(j);saveSnapshot(j)}).catch(()=>{}),0);return}if(q.needsConfirm)return confirmBox(q.userWarning,'TIẾP TỤC',async()=>{await commitAttendance(q.previewToken,custom,'CHECKIN',payload.eventId)});await commitAttendance(q.previewToken,custom,'CHECKIN',payload.eventId)}catch(e){toast(e.message+' Nếu máy chủ đã nhận yêu cầu, bấm RESET để kiểm tra trạng thái trước khi thử lại.')}finally{attendanceBusy=false;if(btn&&btn.isConnected)btn.disabled=false}}
+async function checkin(other=false){if(attendanceBusy)return toast('Đang xử lý lượt chấm công trước đó. Vui lòng đợi kết quả.');const custom=!!other;const projectName=custom?String($('otherProjectName')?.value||'').trim():'';const projectId=custom?('OTHER:'+encodeURIComponent(projectName)):String($('projectSelect')?.value||'');if(custom&&!projectName)return toast('Nhập tên công trình lẻ.');if(!custom&&!projectId)return toast('Chưa có công trình để chọn.');const sh=currentShift();if(!sh)return toast('Chưa đến khung giờ chấm ca hoặc chưa có ca hoạt động.');if(S.attendanceShift&&!S.attendanceShift.eligible)return toast(S.attendanceShift.reason||'Chưa đến giờ chấm ca.');attendanceBusy=true;const btn=document.querySelector('.attendance-btn');if(btn){btn.disabled=true;btn.classList.add('busy');btn.textContent='ĐANG GHI NHẬN…'}const hint=$('shiftHint');if(hint)hint.textContent='Đang ghi nhận chấm công. Dùng vị trí đã nạp nền; nếu chưa có GPS, hệ thống vẫn ghi nhận và bổ sung vị trí nền sau thao tác.';try{const workDate=sh.SHIFT_WORK_DATE||localDate();const gps=gpsFieldsForAttendance();const payload=pendingEvent('CHECKIN',{projectId,shiftId:sh.SHIFT_ID,workDate,...gps});Object.assign(payload,gps);if(custom){payload.otherProject=true;payload.projectName=projectName}if(!navigator.onLine){await queueEvent({action:'CHECKIN',...payload});toast('Đã lưu VÀO CA offline. Sẽ đồng bộ khi có mạng.');return}const q=await api('checkinPreview',payload);if(q.duplicate){clearPendingEvent('CHECKIN');renderAttendance(custom,false);setTimeout(()=>bootstrap().then(j=>{applyBootstrap(j);saveSnapshot(j)}).catch(()=>{}),0);return}if(q.needsConfirm)return confirmBox(q.userWarning,'TIẾP TỤC',async()=>{await commitAttendance(q.previewToken,custom,'CHECKIN',payload.eventId)});await commitAttendance(q.previewToken,custom,'CHECKIN',payload.eventId)}catch(e){toast(e.message+' Nếu máy chủ đã nhận yêu cầu, bấm RESET để kiểm tra trạng thái trước khi thử lại.')}finally{attendanceBusy=false;if(btn&&btn.isConnected)btn.disabled=false}}
 function checkinOther(){return checkin(true)}
-async function checkout(){if(attendanceBusy)return toast('Đang xử lý lượt chấm công trước đó. Vui lòng đợi kết quả.');const sh=currentShift(),att=sh?attendanceForShift(sh.SHIFT_ID,sh.SHIFT_WORK_DATE||localDate()):null;if(!sh||!att||!att.CHECKIN_TIME||att.CHECKOUT_TIME)return toast('Không có ca đang mở để RA CA.');attendanceBusy=true;const btn=document.querySelector('.attendance-btn');if(btn){btn.disabled=true;btn.classList.add('busy');btn.textContent='ĐANG GHI NHẬN…'}const hint=$('shiftHint');if(hint)hint.textContent='Đang ghi nhận chấm công. GPS được cập nhật sau thao tác (tối đa 3 giây).';try{const payload=pendingEvent('CHECKOUT',{projectId:att.PROJECT_ID,shiftId:att.SHIFT_ID,workDate:att.WORK_DATE,lat:'',lng:'',accuracy:0});const c={lat:'',lng:'',accuracy:0};Object.assign(payload,c);if(!navigator.onLine){await queueEvent(payload);toast('Đã lưu RA CA offline. GPS sẽ được bổ sung khi có thể; sẽ đồng bộ khi có mạng.');return}const q=await api('checkoutPreview',payload);if(q.duplicate){clearPendingEvent('CHECKOUT');renderAttendance(screen==='otherAttendance',false);setTimeout(()=>bootstrap().then(j=>{applyBootstrap(j);saveSnapshot(j)}).catch(()=>{}),0);return}if(q.needsConfirm)return confirmBox(q.userWarning,'TIẾP TỤC',async()=>{await commitAttendance(q.previewToken,screen==='otherAttendance','CHECKOUT',payload.eventId)});await commitAttendance(q.previewToken,screen==='otherAttendance','CHECKOUT',payload.eventId)}catch(e){toast(e.message)}finally{attendanceBusy=false;if(btn&&btn.isConnected)btn.disabled=false}}
+async function checkout(){if(attendanceBusy)return toast('Đang xử lý lượt chấm công trước đó. Vui lòng đợi kết quả.');const sh=currentShift(),att=sh?attendanceForShift(sh.SHIFT_ID,sh.SHIFT_WORK_DATE||localDate()):null;if(!sh||!att||!att.CHECKIN_TIME||att.CHECKOUT_TIME)return toast('Không có ca đang mở để RA CA.');attendanceBusy=true;const btn=document.querySelector('.attendance-btn');if(btn){btn.disabled=true;btn.classList.add('busy');btn.textContent='ĐANG GHI NHẬN…'}const hint=$('shiftHint');if(hint)hint.textContent='Đang ghi nhận chấm công. Dùng vị trí đã nạp nền; nếu chưa có GPS, hệ thống vẫn ghi nhận và bổ sung vị trí nền sau thao tác.';try{const gps=gpsFieldsForAttendance();const payload=pendingEvent('CHECKOUT',{projectId:att.PROJECT_ID,shiftId:att.SHIFT_ID,workDate:att.WORK_DATE,...gps});Object.assign(payload,gps);if(!navigator.onLine){await queueEvent(payload);toast('Đã lưu RA CA offline. GPS sẽ được bổ sung khi có thể; sẽ đồng bộ khi có mạng.');return}const q=await api('checkoutPreview',payload);if(q.duplicate){clearPendingEvent('CHECKOUT');renderAttendance(screen==='otherAttendance',false);setTimeout(()=>bootstrap().then(j=>{applyBootstrap(j);saveSnapshot(j)}).catch(()=>{}),0);return}if(q.needsConfirm)return confirmBox(q.userWarning,'TIẾP TỤC',async()=>{await commitAttendance(q.previewToken,screen==='otherAttendance','CHECKOUT',payload.eventId)});await commitAttendance(q.previewToken,screen==='otherAttendance','CHECKOUT',payload.eventId)}catch(e){toast(e.message)}finally{attendanceBusy=false;if(btn&&btn.isConnected)btn.disabled=false}}
 
 async function commitAttendance(pt,isOther=false,action='',eventId=''){try{const j=await api('commitPreview',{previewToken:pt,confirmed:true});clearPendingEvent('CHECKIN');clearPendingEvent('CHECKOUT');toast(j.needsApproval?'Đã ghi nhận. Chờ Admin duyệt.':'Chúc bạn làm việc hiệu quả!');renderAttendance(isOther,false);if(action&&eventId)setTimeout(()=>getLocation(action==='CHECKOUT').then(c=>{if(navigator.onLine&&token)return api('recordGps',{action,eventId,lat:c.latitude,lng:c.longitude,accuracy:c.accuracy}).then(()=>bootstrap().then(data=>{applyBootstrap(data);saveSnapshot(data)}))}).catch(e=>console.info('GPS không được cập nhật sau chấm công:',e.message)),0);setTimeout(()=>{if(navigator.onLine&&token)bootstrap().then(data=>{applyBootstrap(data);saveSnapshot(data);if(screen===(isOther?'otherAttendance':'attendance'))renderAttendance(isOther,false)}).catch(e=>console.warn('Đồng bộ nền sau chấm công:',e))},0)}catch(e){toast(e.message)}}
 function confirmBox(text,ok,yes){$('modalTitle').textContent='XÁC NHẬN';$('modalText').textContent=text||'Bạn có muốn tiếp tục?';$('modalOk').textContent=ok||'TIẾP TỤC';$('modalCancel').textContent='HỦY';$('modal').classList.remove('hidden');$('modalOk').onclick=async()=>{$('modal').classList.add('hidden');await yes()};$('modalCancel').onclick=()=>{$('modal').classList.add('hidden')}}
@@ -277,7 +350,7 @@ async function restore(){
   bootstrap().then(()=>{saveSnapshot(S);if(screen==='userHome'||screen==='adminHome')showHome();showUnread()}).catch(e=>{if(/phiên đăng nhập|không hợp lệ|hết hạn/i.test(e.message)){clearSession();renderLogin()}else{setNet(false);toast('Đang sử dụng dữ liệu đã lưu. Khi có mạng sẽ cập nhật.')}})
 }
 function start(){if(!window.__clEligibilityTimer)window.__clEligibilityTimer=setInterval(()=>{if(token&&(screen==='attendance'||screen==='otherAttendance'))refreshAttendanceEligibility()},5000);const n=$('netState');if(n){n.textContent='SẴN SÀNG';n.classList.remove('offline');n.classList.add('ready')}restore();if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});setTimeout(syncQueue,800);setTimeout(refreshUnread,1500);setInterval(()=>{if(token&&navigator.onLine)refreshUnread()},30000);window.addEventListener('online',()=>{setNet(true);syncQueue()});window.addEventListener('offline',()=>{if(token)setNet(false)});window.addEventListener('focus',()=>{if(token&&navigator.onLine)syncQueue()})}
-window.enablePushNotifications=enablePushNotifications;window.renderUserHome=renderUserHome;window.renderAttendance=renderAttendance;window.renderOtherAttendance=renderOtherAttendance;window.checkinOther=checkinOther;window.openNotification=openNotification;window.renderStats=renderStats;window.loadStats=loadStats;window.renderWork=renderWork;window.renderLeave=renderLeave;window.renderNotifications=renderNotifications;window.renderHistory=renderHistory;window.doLogout=doLogout;window.requestLogout=requestLogout;window.checkin=checkin;window.checkout=checkout;window.requestDayAttendance=requestDayAttendance;window.renderAttendanceShiftState=renderAttendanceShiftState;window.addLeaveDate=addLeaveDate;window.removeLeaveDate=removeLeaveDate;window.sendLeave=sendLeave;window.readNotif=readNotif;window.adminDashboard=adminDashboard;window.adminEmployees=adminEmployees;window.employeeForm=employeeForm;window.saveEmployee=saveEmployee;window.adminProjects=adminProjects;window.projectForm=projectForm;window.saveProject=saveProject;window.adminShifts=adminShifts;window.toggleShiftCard=toggleShiftCard;window.saveShiftRow=saveShiftRow;window.shiftForm=shiftForm;window.toggleShiftFormFields=toggleShiftFormFields;window.saveShift=saveShift;window.adminAttendance=adminAttendance;window.approveAttendance=approveAttendance;window.adminMakeup=adminMakeup;window.saveMakeup=saveMakeup;window.adminGroups=adminGroups;window.groupForm=groupForm;window.saveGroup=saveGroup;window.adminAssignments=adminAssignments;window.saveAssignment=saveAssignment;window.deleteAssignment=deleteAssignment;window.adminLeave=adminLeave;window.leaveDecision=leaveDecision;window.adminNotifications=adminNotifications;window.sendAdminNotif=sendAdminNotif;window.adminReports=adminReports;window.loadReport=loadReport;window.backToEmployeeReport=()=>{if($('rp_emp'))$('rp_emp').value='ALL';loadReport()};window.syncReportDateField=syncReportDateField;window.refreshProjectReportOptions=refreshProjectReportOptions;window.downloadCSV=downloadCSV;window.adminLogs=adminLogs;window.runAdminDataAudit=runAdminDataAudit;window.downloadApiTiming=downloadApiTiming;window.changePassword=changePassword;window.goBack=goBack;window.resetAndSync=resetAndSync;
+window.enablePushNotifications=enablePushNotifications;window.togglePasswordVisibility=togglePasswordVisibility;window.renderUserHome=renderUserHome;window.renderAttendance=renderAttendance;window.renderOtherAttendance=renderOtherAttendance;window.checkinOther=checkinOther;window.openNotification=openNotification;window.renderStats=renderStats;window.loadStats=loadStats;window.renderWork=renderWork;window.renderLeave=renderLeave;window.renderNotifications=renderNotifications;window.renderHistory=renderHistory;window.doLogout=doLogout;window.requestLogout=requestLogout;window.checkin=checkin;window.checkout=checkout;window.requestDayAttendance=requestDayAttendance;window.renderAttendanceShiftState=renderAttendanceShiftState;window.addLeaveDate=addLeaveDate;window.removeLeaveDate=removeLeaveDate;window.sendLeave=sendLeave;window.readNotif=readNotif;window.adminDashboard=adminDashboard;window.adminEmployees=adminEmployees;window.employeeForm=employeeForm;window.saveEmployee=saveEmployee;window.adminProjects=adminProjects;window.projectForm=projectForm;window.saveProject=saveProject;window.adminShifts=adminShifts;window.toggleShiftCard=toggleShiftCard;window.saveShiftRow=saveShiftRow;window.shiftForm=shiftForm;window.toggleShiftFormFields=toggleShiftFormFields;window.saveShift=saveShift;window.adminAttendance=adminAttendance;window.approveAttendance=approveAttendance;window.adminMakeup=adminMakeup;window.saveMakeup=saveMakeup;window.adminGroups=adminGroups;window.groupForm=groupForm;window.saveGroup=saveGroup;window.adminAssignments=adminAssignments;window.saveAssignment=saveAssignment;window.deleteAssignment=deleteAssignment;window.adminLeave=adminLeave;window.leaveDecision=leaveDecision;window.adminNotifications=adminNotifications;window.sendAdminNotif=sendAdminNotif;window.adminReports=adminReports;window.loadReport=loadReport;window.backToEmployeeReport=()=>{if($('rp_emp'))$('rp_emp').value='ALL';loadReport()};window.syncReportDateField=syncReportDateField;window.refreshProjectReportOptions=refreshProjectReportOptions;window.downloadCSV=downloadCSV;window.adminLogs=adminLogs;window.runAdminDataAudit=runAdminDataAudit;window.downloadApiTiming=downloadApiTiming;window.changePassword=changePassword;window.goBack=goBack;window.resetAndSync=resetAndSync;
 // Backward-compatible global aliases: older cached markup/builds referenced double-underscore names.
 window.adminProjects__=adminProjects;window.adminReports__=adminReports;window.adminShifts__=adminShifts;window.adminMakeup__=adminMakeup;window.adminAssignments__=adminAssignments;
 window.saveProject__=saveProject;window.saveShift__=saveShift;window.saveShiftRow__=saveShiftRow;window.saveMakeup__=saveMakeup;window.saveAssignment__=saveAssignment;

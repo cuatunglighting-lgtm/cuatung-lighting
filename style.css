@@ -87,3 +87,8 @@ button:disabled,.btn:disabled{cursor:not-allowed;filter:saturate(.55);opacity:.6
 @media(min-width:760px){.report-mobile-list{display:none}.report-desktop-table{display:block}.report-kpis{max-width:820px}.report-kpis>div{padding:16px}.report-kpis span{font-size:12px}}
 @media(max-width:380px){.report-kpis{gap:5px}.report-kpis>div{padding:9px 7px}.report-kpis span{font-size:10px}.report-kpis b{font-size:16px}.report-project-card{padding:11px}.report-card-metrics{gap:5px}.report-card-metrics b{font-size:12px}}
 @media print{.report-mobile-list{display:none!important}.report-desktop-table{display:block!important}.report-kpis>div{background:#fff;border:1px solid #999}.report-kpis b{font-size:15px}}
+/* V11.2.0 password visibility control; keeps the existing login field geometry. */
+.password-wrap{position:relative;display:flex;align-items:center;width:100%}
+.password-wrap input{padding-right:76px!important}
+.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);min-width:58px;min-height:38px;padding:6px 9px;border:0;border-radius:10px;background:#eef3f8;color:#17365c;font-size:12px;font-weight:900;letter-spacing:.2px;cursor:pointer;touch-action:manipulation}
+.password-toggle:focus-visible{outline:2px solid #3979c8;outline-offset:2px}
