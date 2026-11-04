@@ -92,3 +92,12 @@ button:disabled,.btn:disabled{cursor:not-allowed;filter:saturate(.55);opacity:.6
 .password-wrap input{padding-right:76px!important}
 .password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);min-width:58px;min-height:38px;padding:6px 9px;border:0;border-radius:10px;background:#eef3f8;color:#17365c;font-size:12px;font-weight:900;letter-spacing:.2px;cursor:pointer;touch-action:manipulation}
 .password-toggle:focus-visible{outline:2px solid #3979c8;outline-offset:2px}
+
+/* V11.4.0: mobile date/month fields stay inside their cards on iOS Safari. */
+.field input[type=date],.field input[type=month],.field input[type=number]{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin:0;appearance:none;-webkit-appearance:none;text-align:left;padding-left:14px;padding-right:12px;font-variant-numeric:tabular-nums}
+.stats-filter,.stats-filter .two,.stats-filter .field,.card,.field{min-width:0;max-width:100%}
+.stats-filter .two{grid-template-columns:minmax(0,1fr)}
+@media(min-width:560px){.stats-filter .two{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.attendance-feedback{margin:16px 0 4px;padding:18px 12px;border-radius:16px;text-align:center;font-size:clamp(22px,5.4vw,32px);line-height:1.2;font-weight:950;letter-spacing:.2px}
+.attendance-feedback.success{background:#e4f5eb;color:#197548}
+@media(max-width:600px){.field input[type=date],.field input[type=month]{font-size:16px;padding-left:12px;padding-right:8px}.stats-filter .two{gap:0}}
