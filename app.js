@@ -15,21 +15,21 @@ function goBack(){
 window.addEventListener('popstate',()=>{goBack()});
 
 const readActions=new Set(['health','bootstrap','notificationsUser','userHistory','dailyStats','monthlyStats','adminDashboard','adminEmployees','adminPeople','adminProjects','adminProjectOptions','adminDataAudit','adminShifts','adminAttendance','adminGroups','adminAssignments','adminLeave','adminNotifications','adminReports','adminEmployeeMonthDetail']);const inflight=new Map();
-const fastCacheActions=new Set(['dailyStats','monthlyStats','adminReports','adminDashboard','adminEmployeeMonthDetail']);
-async function api(action,payload={}){if(readActions.has(action)){const k=action+'|'+JSON.stringify(payload||{});if(fastCacheActions.has(action)){const ck='cl_readcache_'+btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'').slice(0,90);try{const hit=JSON.parse(LS.getItem(ck)||'null');if(hit&&Date.now()-hit.at<90000){if(!inflight.has(k)){const refresh=apiRequest(action,payload).then(v=>{LS.setItem(ck,JSON.stringify({at:Date.now(),data:v}));return v}).catch(()=>null).finally(()=>inflight.delete(k));inflight.set(k,refresh)}return hit.data}}catch(_){}}if(inflight.has(k))return inflight.get(k);const p=apiRequest(action,payload).then(v=>{if(fastCacheActions.has(action)){const ck='cl_readcache_'+btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'').slice(0,90);try{LS.setItem(ck,JSON.stringify({at:Date.now(),data:v}))}catch(_){}}return v});inflight.set(k,p);try{return await p}finally{inflight.delete(k)}}return apiRequest(action,payload)}
+const fastCacheActions=new Set(['dailyStats','monthlyStats','adminReports','adminDashboard','adminEmployeeMonthDetail','adminPeople','adminEmployees','adminProjects','adminShifts','adminGroups','adminProjectOptions','adminAssignments','adminNotifications']);
+async function api(action,payload={}){if(readActions.has(action)){const k=String(me&&me.EMPLOYEE_ID||'')+'|'+String(me&&me.ROLE||'')+'|'+action+'|'+JSON.stringify(payload||{});if(fastCacheActions.has(action)){const ck='cl_readcache_'+btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'').slice(0,90);try{const hit=JSON.parse(LS.getItem(ck)||'null');if(hit&&Date.now()-hit.at<90000){if(!inflight.has(k)){const refresh=apiRequest(action,payload).then(v=>{LS.setItem(ck,JSON.stringify({at:Date.now(),data:v}));return v}).catch(()=>null).finally(()=>inflight.delete(k));inflight.set(k,refresh)}return hit.data}}catch(_){}}if(inflight.has(k))return inflight.get(k);const p=apiRequest(action,payload).then(v=>{if(fastCacheActions.has(action)){const ck='cl_readcache_'+btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'').slice(0,90);try{LS.setItem(ck,JSON.stringify({at:Date.now(),data:v}))}catch(_){}}return v});inflight.set(k,p);try{return await p}finally{inflight.delete(k)}}return apiRequest(action,payload)}
 async function apiRequest(action,payload={}){
   const startedAt=performance.now();
   if(!A.API_URL)throw Error('Thiếu API_URL trong config.js.');
-  const attempts=readActions.has(action)?2:1;let lastError;
+  const attempts=readActions.has(action)?1:1;let lastError;
   for(let attempt=0;attempt<attempts;attempt++){
-    const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),25000);
+    const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),16000);
     try{
       const r=await fetch(A.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload,token,clientVersion:A.VERSION}),signal:ctl.signal,cache:'no-store',credentials:'omit',redirect:'follow'});
       const raw=await r.text();let j;try{j=JSON.parse(raw)}catch(e){throw Error('Web App không trả JSON. Kiểm tra URL /exec, bản Deploy Web App và quyền truy cập.');}
       if(!j.ok)throw Error(j.error||'API lỗi');
       if(j.version&&A.VERSION&&String(j.version)!==String(A.VERSION))throw Error('PHIÊN BẢN KHÔNG ĐỒNG BỘ: Ứng dụng '+A.VERSION+' / Máy chủ '+j.version+'. Hãy cập nhật đồng bộ Apps Script và GitHub.');
       try{const stats=JSON.parse(LS.getItem('cl_api_timing')||'[]');stats.push({action,clientMs:Math.round(performance.now()-startedAt),serverMs:Number(j.serverMs||0),transportMs:Math.max(0,Math.round(performance.now()-startedAt-Number(j.serverMs||0))),payloadBytes:JSON.stringify(payload||{}).length,at:new Date().toISOString(),ok:true});LS.setItem('cl_api_timing',JSON.stringify(stats.slice(-200)))}catch(_){}
-      setNet(true);return j;
+      if(!readActions.has(action)){try{Object.keys(LS).filter(k=>k.startsWith('cl_readcache_')).forEach(k=>LS.removeItem(k))}catch(_){}}setNet(true);return j;
     }catch(e){lastError=e;try{const stats=JSON.parse(LS.getItem('cl_api_timing')||'[]');stats.push({action,clientMs:Math.round(performance.now()-startedAt),serverMs:null,at:new Date().toISOString(),ok:false,error:e.name==='AbortError'?'TIMEOUT':e instanceof TypeError?'NETWORK':'API_ERROR'});LS.setItem('cl_api_timing',JSON.stringify(stats.slice(-200)))}catch(_){}const transient=e.name==='AbortError'||e instanceof TypeError;
       if(!(transient&&attempt+1<attempts)){
         if(e.name==='AbortError')throw Error('Apps Script phản hồi quá thời gian. Kiểm tra trạng thái triển khai và thử lại.');
@@ -48,6 +48,7 @@ let oneSignalInitPromise = null;
 let oneSignalClientPromise = null;
 let oneSignalCurrentExternalId = '';
 let oneSignalInstance = null;
+let oneSignalLoginChain=Promise.resolve();
 function getOneSignalClient(){
   if(oneSignalClientPromise)return oneSignalClientPromise;
   if(!A.ONESIGNAL_APP_ID)return Promise.reject(Error('Thiếu ONESIGNAL_APP_ID trong config.js.'));
@@ -58,9 +59,9 @@ function getOneSignalClient(){
         if(!oneSignalInitPromise){
           oneSignalInitPromise=Promise.resolve(OneSignal.init({
             appId:A.ONESIGNAL_APP_ID,
-            serviceWorkerPath:'./onesignal/OneSignalSDKWorker.js',
-            serviceWorkerUpdaterPath:'./onesignal/OneSignalSDKUpdaterWorker.js',
-            serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'}
+            serviceWorkerPath:'onesignal/OneSignalSDKWorker.js',
+            serviceWorkerUpdaterPath:'onesignal/OneSignalSDKUpdaterWorker.js',
+            serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'},notifyButton:{enable:false},allowLocalhostAsSecureOrigin:false
           })).then(()=>{oneSignalReady=true;return OneSignal}).catch(err=>{oneSignalInitPromise=null;throw err});
         }
         await oneSignalInitPromise;
@@ -75,7 +76,7 @@ async function loginOneSignalForCurrentUser(){
   if(!me||!me.EMPLOYEE_ID)return null;
   const externalId=String(me.EMPLOYEE_ID);
   const OneSignal=await getOneSignalClient();
-  if(oneSignalCurrentExternalId!==externalId){await OneSignal.login(externalId);oneSignalCurrentExternalId=externalId;}
+  if(oneSignalCurrentExternalId!==externalId){oneSignalLoginChain=oneSignalLoginChain.catch(()=>{}).then(async()=>{if(oneSignalCurrentExternalId!==externalId){await OneSignal.login(externalId);oneSignalCurrentExternalId=externalId;}});await oneSignalLoginChain;}
   updatePushButtonState(OneSignal);
   return OneSignal;
 }
@@ -83,7 +84,7 @@ function updatePushButtonState(OneSignal){
   const b=$('pushEnableBtn');if(!b)return;
   b.classList.remove('hidden');
   const sub=OneSignal&&OneSignal.User&&OneSignal.User.PushSubscription;
-  const opted=!!(sub&&sub.optedIn);
+  const opted=!!(sub&&sub.optedIn&&sub.id&&Notification.permission==='granted');
   b.textContent=opted?'🔔✓':'🔔';
   b.title=opted?'Thông báo đẩy đã bật':'Bật thông báo đẩy';
   b.setAttribute('aria-label',b.title);
@@ -108,7 +109,9 @@ async function enablePushNotifications(){
       : Notification.permission==='denied'
         ? Promise.resolve('denied')
         : Notification.requestPermission();
-    const [permission,OneSignal]=await Promise.all([permissionPromise,loginOneSignalForCurrentUser()]);
+    const permission=await permissionPromise;
+    if(permission!=='granted'&&Notification.permission!=='granted'){toast('Bạn chưa cấp quyền thông báo.');return;}
+    const OneSignal=await loginOneSignalForCurrentUser();
     if(!OneSignal)throw Error('Không xác định được tài khoản nhân viên để đăng ký Push.');
     if(permission!=='granted'&&Notification.permission!=='granted'){
       updatePushButtonState(OneSignal);
@@ -257,7 +260,7 @@ async function saveAssignment(){const btn=document.querySelector('button[onclick
 async function deleteAssignment(id){try{await api('adminDeleteAssignment',{ASSIGNMENT_ID:id});adminAssignments()}catch(e){toast(e.message)}}
 async function adminLeave(){try{const j=await api('adminLeave',{STATUS:'PENDING'});adminShell('NGHỈ PHÉP',`<div class="card table-wrap"><table class="table"><thead><tr><th>Nhân viên</th><th>Ngày</th><th>Ca</th><th>Lý do</th><th></th></tr></thead><tbody>${j.rows.map(x=>`<tr><td>${esc(x.EMPLOYEE_NAME||x.EMPLOYEE_ID)}</td><td>${esc(x.WORK_DATE)}</td><td>${esc(x.SHIFT)}</td><td>${esc(x.REASON)}</td><td><button class="btn green" onclick="leaveDecision('${esc(x.LEAVE_ID)}','APPROVED')">DUYỆT</button> <button class="btn red" onclick="leaveDecision('${esc(x.LEAVE_ID)}','REJECTED')">TỪ CHỐI</button></td></tr>`).join('')}</tbody></table></div>`)}catch(e){toast(e.message)}}
 async function leaveDecision(id,status){try{await api('adminLeaveDecision',{LEAVE_ID:id,STATUS:status});adminLeave()}catch(e){toast(e.message)}}
-async function adminNotifications(){try{const [j,e]=await Promise.all([api('adminNotifications'),api('adminPeople')]);adminShell('THÔNG BÁO',`<div class="card"><div class="field"><label>Nhân viên</label><select id="nf_emp">${e.rows.filter(x=>x.STATUS==='ACTIVE').map(x=>`<option value="${esc(x.EMPLOYEE_ID)}">${esc(x.NAME)}</option>`).join('')}</select></div><div class="field"><label>Tiêu đề</label><input id="nf_title"></div><div class="field"><label>Nội dung</label><textarea id="nf_msg"></textarea></div><button class="btn blue full" onclick="sendAdminNotif()">GỬI THÔNG BÁO</button></div><div class="card table-wrap"><table class="table"><thead><tr><th>Nhân viên</th><th>Tiêu đề</th><th>Đã xem</th></tr></thead><tbody>${j.rows.map(x=>`<tr><td>${esc(x.EMPLOYEE_NAME||x.EMPLOYEE_ID)}</td><td>${esc(x.TITLE)}</td><td>${x.READ_AT?'Có':'Chưa'}</td></tr>`).join('')}</tbody></table></div>`)}catch(e){toast(e.message)}}
+async function adminNotifications(){try{const [j,e]=await Promise.all([api('adminNotifications'),api('adminPeople')]);adminShell('THÔNG BÁO',`<div class="card"><h3>THÔNG BÁO ADMIN NHẬN</h3><p>Chỉ hiển thị đề nghị nghỉ phép của nhân viên và lỗi kỹ thuật của hệ thống.</p><div class="table-wrap"><table class="table"><thead><tr><th>Nhân viên / Nguồn</th><th>Loại</th><th>Nội dung</th><th>Đã xem</th></tr></thead><tbody>${j.rows.map(x=>`<tr><td>${esc(x.EMPLOYEE_NAME||x.EMPLOYEE_ID)}</td><td>${esc(x.TYPE==='LEAVE'?'NGHỈ PHÉP':'LỖI HỆ THỐNG')}</td><td>${esc(x.TITLE)}<br>${esc(x.MESSAGE)}</td><td>${x.READ_AT?'Có':'Chưa'}</td></tr>`).join('')||'<tr><td colspan="4">Chưa có đề nghị nghỉ phép hoặc lỗi hệ thống.</td></tr>'}</tbody></table></div></div><div class="card"><h3>GỬI THÔNG BÁO CHO NHÂN VIÊN</h3><div class="field"><label>Nhân viên</label><select id="nf_emp">${e.rows.filter(x=>x.STATUS==='ACTIVE').map(x=>`<option value="${esc(x.EMPLOYEE_ID)}">${esc(x.NAME)}</option>`).join('')}</select></div><div class="field"><label>Tiêu đề</label><input id="nf_title"></div><div class="field"><label>Nội dung</label><textarea id="nf_msg"></textarea></div><button class="btn blue full" onclick="sendAdminNotif()">GỬI THÔNG BÁO</button></div>`)}catch(e){toast(e.message)}}
 async function sendAdminNotif(){try{await api('adminNotifications',{send:true,EMPLOYEE_ID:$('nf_emp').value,TITLE:$('nf_title').value,MESSAGE:$('nf_msg').value});toast('Đã gửi.');adminNotifications()}catch(e){toast(e.message)}}
 async function adminReports(){try{const [e,p,po]=await Promise.all([api('adminEmployees'),api('adminProjects'),api('adminProjectOptions',{year:new Date().getFullYear()})]);adminShell('BÁO CÁO',`<div class="card"><div class="field"><label>Nhóm báo cáo</label><select id="rp_kind" onchange="syncReportDateField()"><option value="EMPLOYEE">BÁO CÁO THEO NHÂN VIÊN</option><option value="PROJECT">BÁO CÁO THEO CÔNG TRÌNH</option></select></div><div id="rp_employee_filters"><div class="two"><div class="field"><label>Loại báo cáo</label><select id="rp_mode" onchange="syncReportDateField()"><option value="MONTH">THÁNG</option><option value="DAY">NGÀY</option></select></div><div class="field"><label>Nhân viên</label><select id="rp_emp"><option value="ALL">Tất cả nhân viên</option>${e.rows.map(x=>`<option value="${esc(x.EMPLOYEE_ID)}">${esc(x.NAME)} — ${esc(x.EMPLOYEE_ID)}</option>`).join('')}</select></div></div></div><div class="field"><label id="rp_date_label">Tháng báo cáo</label><input id="rp_date" type="month" value="${localMonth()}" onchange="refreshProjectReportOptions()"></div><div class="field" id="rp_project_filter" style="display:none"><label>Công trình</label><select id="rp_project"><option value="ALL">Tất cả công trình</option>${p.rows.map(x=>`<option value="${esc(x.PROJECT_ID)}">${esc(x.PROJECT_NAME)}</option>`).join('')}</select></div><div class="section-actions"><button class="btn blue" onclick="loadReport()">XEM BÁO CÁO</button></div><div id="reportArea">Chọn điều kiện rồi xem báo cáo.</div></div>`);window._reportProjects=p.rows||[];syncReportDateField()}catch(e){toast(e.message)}}
 async function refreshProjectReportOptions(){if(($('rp_kind')?.value||'')!=='PROJECT')return;const year=Number($('rp_date')?.value||new Date().getFullYear()),select=$('rp_project');if(!select)return;const keep=select.value;try{const j=await api('adminProjectOptions',{year});select.innerHTML='<option value="ALL">Tất cả công trình</option>'+(j.rows||[]).map(x=>`<option value="${esc(x.PROJECT_ID)}">${esc(x.PROJECT_NAME)}</option>`).join('');if(Array.from(select.options).some(o=>o.value===keep))select.value=keep}catch(e){toast(e.message)}}
