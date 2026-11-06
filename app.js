@@ -102,7 +102,7 @@ async function enablePushNotifications(){
   // Request browser permission immediately in the original tap handler. Do not await SDK init first:
   // iOS may discard transient user activation after an await, which previously forced a second tap.
   if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
-  let permissionPromise;
+  let permissionPromise, pushStage='xin quyền trình duyệt';
   try{
     permissionPromise=Notification.permission==='granted'
       ? Promise.resolve('granted')
@@ -111,13 +111,17 @@ async function enablePushNotifications(){
         : Notification.requestPermission();
     const permission=await permissionPromise;
     if(permission!=='granted'&&Notification.permission!=='granted'){toast('Bạn chưa cấp quyền thông báo.');return;}
+    pushStage='khởi tạo SDK và gắn mã nhân viên';
     const OneSignal=await loginOneSignalForCurrentUser();
     if(!OneSignal)throw Error('Không xác định được tài khoản nhân viên để đăng ký Push.');
+    if(!OneSignal.User||!OneSignal.User.PushSubscription)throw Error('SDK đã tải nhưng chưa có User.PushSubscription. Hãy tải lại ứng dụng và thử lại.');
     if(permission!=='granted'&&Notification.permission!=='granted'){
       updatePushButtonState(OneSignal);
       toast(permission==='denied'?'Quyền thông báo đang bị chặn. Hãy mở cài đặt trang web và cho phép thông báo.':'Bạn chưa cấp quyền thông báo cho ứng dụng.');
       return;
     }
+    pushStage='đăng ký Push Subscription';
+    if(typeof OneSignal.User.PushSubscription.optIn!=='function')throw Error('SDK không cung cấp PushSubscription.optIn().');
     await OneSignal.User.PushSubscription.optIn();
     const sub=OneSignal.User&&OneSignal.User.PushSubscription;
     const deadline=Date.now()+12000;
@@ -127,7 +131,8 @@ async function enablePushNotifications(){
     else toast('Đã cấp quyền nhưng OneSignal chưa xác nhận đăng ký thiết bị. Kiểm tra mạng, sau đó nhấn chuông để thử lại.');
   }catch(err){
     console.error('[OneSignal] opt-in:',err);
-    toast('Chưa bật được thông báo: '+(err.message||err));
+    const detail=err&&err.message?err.message:String(err||'Lỗi không xác định');
+    toast('Lỗi tại bước '+pushStage+': '+detail);
   }finally{if(b){b.disabled=false;b.removeAttribute('aria-busy')}}
 }
 async function logoutOneSignal(){
