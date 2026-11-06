@@ -42,41 +42,72 @@ async function apiRequest(action,payload={}){
   throw lastError||Error('Không kết nối được Apps Script.');
 }
 
-// OneSignal Web SDK v16: a single shared initialization promise prevents concurrent init calls.
+// OneSignal Web SDK v16: initialize once, validate only documented public APIs,
+// and keep SDK initialization separate from employee identity binding.
 let oneSignalReady = false;
-let oneSignalInitPromise = null;
 let oneSignalClientPromise = null;
 let oneSignalCurrentExternalId = '';
-let oneSignalInstance = null;
-let oneSignalLoginChain=Promise.resolve();
+let oneSignalLoginChain = Promise.resolve();
+const ONE_SIGNAL_WORKER_PATH = '/cuatung-lighting/onesignal/OneSignalSDKWorker.js';
+const ONE_SIGNAL_WORKER_SCOPE = '/cuatung-lighting/onesignal/';
+function withOneSignalTimeout(promise, ms, label){
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject)=>{timer=setTimeout(()=>reject(Error(label+' quá thời gian ('+Math.round(ms/1000)+' giây).')),ms)})
+  ]).finally(()=>clearTimeout(timer));
+}
 function getOneSignalClient(){
   if(oneSignalClientPromise)return oneSignalClientPromise;
   if(!A.ONESIGNAL_APP_ID)return Promise.reject(Error('Thiếu ONESIGNAL_APP_ID trong config.js.'));
-  if(!window.OneSignalDeferred)return Promise.reject(Error('OneSignal SDK chưa được nạp. Hãy tải lại ứng dụng.'));
+  if(!window.OneSignalDeferred||typeof window.OneSignalDeferred.push!=='function')return Promise.reject(Error('Không tìm thấy hàng đợi OneSignalDeferred. Kiểm tra thẻ SDK trong index.html.'));
   oneSignalClientPromise=new Promise((resolve,reject)=>{
-    window.OneSignalDeferred.push(async function(OneSignal){
-      try{
-        if(!oneSignalInitPromise){
-          oneSignalInitPromise=Promise.resolve(OneSignal.init({
-            appId:A.ONESIGNAL_APP_ID,
-            serviceWorkerPath:'onesignal/OneSignalSDKWorker.js',
-            serviceWorkerUpdaterPath:'onesignal/OneSignalSDKUpdaterWorker.js',
-            serviceWorkerParam:{scope:'/cuatung-lighting/onesignal/'},notifyButton:{enable:false},allowLocalhostAsSecureOrigin:false
-          })).then(()=>{oneSignalReady=true;return OneSignal}).catch(err=>{oneSignalInitPromise=null;throw err});
-        }
-        await oneSignalInitPromise;
-        oneSignalInstance=OneSignal;
-        resolve(OneSignal);
-      }catch(err){const m=String(err&&err.message||err);if(/already initialized/i.test(m)){oneSignalReady=true;oneSignalInstance=OneSignal;resolve(OneSignal);return}oneSignalClientPromise=null;reject(err)}
-    });
-  });
+    let settled=false;
+    const finish=(fn,value)=>{if(settled)return;settled=true;clearTimeout(timer);fn(value)};
+    const timer=setTimeout(()=>finish(reject,Error('SDK không gọi lại OneSignalDeferred. Kiểm tra CDN, mạng và thứ tự nạp script.')),15000);
+    try{
+      window.OneSignalDeferred.push(async function(OneSignal){
+        try{
+          if(!OneSignal||typeof OneSignal.init!=='function')throw Error('SDK tải về nhưng không có hàm init() công khai.');
+          try{
+            await withOneSignalTimeout(OneSignal.init({
+              appId:A.ONESIGNAL_APP_ID,
+              serviceWorkerPath:ONE_SIGNAL_WORKER_PATH,
+              serviceWorkerUpdaterPath:'/cuatung-lighting/onesignal/OneSignalSDKUpdaterWorker.js',
+              serviceWorkerParam:{scope:ONE_SIGNAL_WORKER_SCOPE},
+              notifyButton:{enable:false},
+              allowLocalhostAsSecureOrigin:false
+            }),20000,'OneSignal.init');
+          }catch(initError){
+            // Do not mask arbitrary SDK exceptions as "already initialized".
+            const message=String(initError&&initError.message||initError);
+            if(!/already initialized/i.test(message))throw initError;
+          }
+          if(typeof OneSignal.login!=='function')throw Error('SDK đã khởi tạo nhưng thiếu OneSignal.login(). Kiểm tra SDK Web v16.');
+          if(!OneSignal.User||!OneSignal.User.PushSubscription)throw Error('SDK đã khởi tạo nhưng thiếu User.PushSubscription.');
+          oneSignalReady=true;
+          finish(resolve,OneSignal);
+        }catch(err){finish(reject,err)}
+      });
+    }catch(err){finish(reject,err)}
+  }).catch(err=>{oneSignalClientPromise=null;throw err});
   return oneSignalClientPromise;
 }
 async function loginOneSignalForCurrentUser(){
   if(!me||!me.EMPLOYEE_ID)return null;
-  const externalId=String(me.EMPLOYEE_ID);
+  const externalId=String(me.EMPLOYEE_ID).trim();
+  if(!externalId)throw Error('EMPLOYEE_ID rỗng, không thể gắn danh tính OneSignal.');
   const OneSignal=await getOneSignalClient();
-  if(oneSignalCurrentExternalId!==externalId){oneSignalLoginChain=oneSignalLoginChain.catch(()=>{}).then(async()=>{if(oneSignalCurrentExternalId!==externalId){await OneSignal.login(externalId);oneSignalCurrentExternalId=externalId;}});await oneSignalLoginChain;}
+  if(oneSignalCurrentExternalId!==externalId){
+    oneSignalLoginChain=oneSignalLoginChain.catch(()=>{}).then(async()=>{
+      if(oneSignalCurrentExternalId!==externalId){
+        if(typeof OneSignal.login!=='function')throw Error('SDK không cung cấp OneSignal.login().');
+        await withOneSignalTimeout(OneSignal.login(externalId),15000,'OneSignal.login(EMPLOYEE_ID)');
+        oneSignalCurrentExternalId=externalId;
+      }
+    });
+    await oneSignalLoginChain;
+  }
   updatePushButtonState(OneSignal);
   return OneSignal;
 }
@@ -99,42 +130,51 @@ async function enablePushNotifications(){
   if(!me||!me.EMPLOYEE_ID){toast('Vui lòng đăng nhập trước.');return}
   if(!('Notification'in window)||!('serviceWorker'in navigator)){toast('Trình duyệt này chưa hỗ trợ thông báo đẩy.');return}
   if(/iPhone|iPad|iPod/i.test(navigator.userAgent)&&!navigator.standalone&&!window.matchMedia('(display-mode: standalone)').matches){toast('Trên iPhone, hãy thêm CUATUNG vào Màn hình chính rồi mở ứng dụng để bật thông báo.');return}
-  // Request browser permission immediately in the original tap handler. Do not await SDK init first:
-  // iOS may discard transient user activation after an await, which previously forced a second tap.
   if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
-  let permissionPromise, pushStage='xin quyền trình duyệt';
+  let stage='xin quyền thông báo của trình duyệt';
   try{
-    permissionPromise=Notification.permission==='granted'
-      ? Promise.resolve('granted')
-      : Notification.permission==='denied'
-        ? Promise.resolve('denied')
-        : Notification.requestPermission();
-    const permission=await permissionPromise;
-    if(permission!=='granted'&&Notification.permission!=='granted'){toast('Bạn chưa cấp quyền thông báo.');return;}
-    pushStage='khởi tạo SDK và gắn mã nhân viên';
-    const OneSignal=await loginOneSignalForCurrentUser();
-    if(!OneSignal)throw Error('Không xác định được tài khoản nhân viên để đăng ký Push.');
-    if(!OneSignal.User||!OneSignal.User.PushSubscription)throw Error('SDK đã tải nhưng chưa có User.PushSubscription. Hãy tải lại ứng dụng và thử lại.');
+    // Keep the permission request directly inside the tap handler for iOS Safari.
+    const permission=Notification.permission==='granted'?'granted':Notification.permission==='denied'?'denied':await Notification.requestPermission();
     if(permission!=='granted'&&Notification.permission!=='granted'){
-      updatePushButtonState(OneSignal);
-      toast(permission==='denied'?'Quyền thông báo đang bị chặn. Hãy mở cài đặt trang web và cho phép thông báo.':'Bạn chưa cấp quyền thông báo cho ứng dụng.');
+      toast(permission==='denied'?'Quyền thông báo đang bị chặn. Hãy bật trong Cài đặt iPhone.':'Bạn chưa cấp quyền thông báo.');
       return;
     }
-    pushStage='đăng ký Push Subscription';
-    if(typeof OneSignal.User.PushSubscription.optIn!=='function')throw Error('SDK không cung cấp PushSubscription.optIn().');
-    await OneSignal.User.PushSubscription.optIn();
-    const sub=OneSignal.User&&OneSignal.User.PushSubscription;
-    const deadline=Date.now()+12000;
-    while(sub&&(!sub.id||!sub.optedIn)&&Date.now()<deadline)await new Promise(r=>setTimeout(r,300));
+    stage='tải và khởi tạo OneSignal SDK';
+    const OneSignal=await getOneSignalClient();
+    stage='gắn mã nhân viên vào OneSignal';
+    const externalId=String(me.EMPLOYEE_ID).trim();
+    if(!externalId)throw Error('EMPLOYEE_ID không hợp lệ.');
+    if(oneSignalCurrentExternalId!==externalId){
+      oneSignalLoginChain=oneSignalLoginChain.catch(()=>{}).then(async()=>{
+        if(oneSignalCurrentExternalId!==externalId){
+          await withOneSignalTimeout(OneSignal.login(externalId),15000,'OneSignal.login');
+          oneSignalCurrentExternalId=externalId;
+        }
+      });
+      await oneSignalLoginChain;
+    }
+    if(!OneSignal.User||!OneSignal.User.PushSubscription)throw Error('Không đọc được User.PushSubscription sau khi đăng nhập.');
+    stage='đăng ký Push Subscription';
+    const sub=OneSignal.User.PushSubscription;
+    if(typeof sub.optIn!=='function')throw Error('SDK không cung cấp PushSubscription.optIn().');
+    await withOneSignalTimeout(sub.optIn(),20000,'PushSubscription.optIn');
+    stage='xác nhận Subscription ID';
+    const deadline=Date.now()+15000;
+    while((!sub.id||!sub.optedIn)&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,300));
     updatePushButtonState(OneSignal);
-    if(sub&&sub.id&&sub.optedIn)toast('Đã bật thông báo đẩy cho tài khoản này.');
-    else toast('Đã cấp quyền nhưng OneSignal chưa xác nhận đăng ký thiết bị. Kiểm tra mạng, sau đó nhấn chuông để thử lại.');
+    if(sub.id&&sub.optedIn){
+      toast('Đã đăng ký thông báo cho mã nhân viên '+externalId+'.');
+      console.info('[OneSignal] Push ready',{externalId,subscriptionId:sub.id,optedIn:sub.optedIn});
+    }else{
+      throw Error('Trình duyệt đã cấp quyền nhưng OneSignal chưa tạo Subscription ID. Kiểm tra Service Worker và cấu hình Web Push trong OneSignal.');
+    }
   }catch(err){
-    console.error('[OneSignal] opt-in:',err);
+    console.error('[OneSignal]['+stage+']',err);
     const detail=err&&err.message?err.message:String(err||'Lỗi không xác định');
-    toast('Lỗi tại bước '+pushStage+': '+detail);
+    toast('Lỗi tại bước '+stage+': '+detail);
   }finally{if(b){b.disabled=false;b.removeAttribute('aria-busy')}}
 }
+
 async function logoutOneSignal(){
   try{
     if(!oneSignalReady)return;
