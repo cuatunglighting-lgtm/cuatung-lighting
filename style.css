@@ -101,3 +101,10 @@ button:disabled,.btn:disabled{cursor:not-allowed;filter:saturate(.55);opacity:.6
 .attendance-feedback{margin:16px 0 4px;padding:18px 12px;border-radius:16px;text-align:center;font-size:clamp(22px,5.4vw,32px);line-height:1.2;font-weight:950;letter-spacing:.2px}
 .attendance-feedback.success{background:#e4f5eb;color:#197548}
 @media(max-width:600px){.field input[type=date],.field input[type=month]{font-size:16px;padding-left:12px;padding-right:8px}.stats-filter .two{gap:0}}
+
+/* V11.12.0: geofence-first project selection with explicit manual fallback. */
+.gps-project-status{margin:0 0 10px;padding:11px 13px;border-radius:10px;background:#eef3f8;color:#43566b;font-size:13px;font-weight:700;line-height:1.45}
+.gps-project-status.valid{background:#e4f5eb;color:#197548}
+.gps-project-status.manual{background:#fff4df;color:#8a5a00;border:1px solid #f0d49b}
+.gps-project-status.pending{background:#eef3f8;color:#43566b}
+#projectSelect{width:100%;min-height:46px}
