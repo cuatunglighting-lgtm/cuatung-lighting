@@ -1,5 +1,5 @@
-// V11.0.4 service worker: network-first with a 2.5 s fallback to cache, so a weak signal at the site never stalls app start.
-const CACHE='cuatung-lighting-v11.0.4-shell';
+// V11.0.5 service worker: network-first with a 2.5 s fallback to cache, so a weak signal at the site never stalls app start.
+const CACHE='cuatung-lighting-v11.0.5-shell';
 const ASSETS=['./','./index.html','./style.css','./app.js','./config.js','./manifest.json','./assets/logo.png','./assets/icon-192x192.png','./assets/icon-512x512.png','./assets/apple-touch-icon.png','./assets/favicon-32.png'];
 const NET_TIMEOUT_MS=2500;
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
