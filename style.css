@@ -237,3 +237,11 @@ select.auto-picked{outline:2px solid #9fd3b5}
 .htotal{border-top:1px solid #d9e2ed;padding-top:8px;font-size:14px;color:#334155}
 .work-card{background:#fff;border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(18,55,95,.08);border-left:5px solid var(--blue)}.work-card.past{border-left-color:#cbd5e1;opacity:.85}
 .work-when{font-weight:900;color:var(--navy)}.work-title{display:block;font-size:17px;margin:4px 0 2px}.work-note{margin:6px 0 0;color:#475569;white-space:pre-wrap}
+
+/* V11.0.10 grouped export */
+@media print{
+  .pr-table.grouped tbody{page-break-inside:avoid}
+  .pr-table tbody.band td{background:#f1f6fb;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pr-table td.mg{vertical-align:middle;text-align:center;font-weight:700}
+  .pr-table.grouped tbody{border-top:1.5px solid #333}
+}
