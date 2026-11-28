@@ -3,46 +3,399 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#173d38">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Thu Chi">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#0b2748"><meta name="color-scheme" content="light">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="CHẤM CÔNG">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/icon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="assets/icon-16x16.png"><link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192x192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="application-name" content="CHẤM CÔNG">
-<link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://script.google.com" crossorigin>
-<link rel="dns-prefetch" href="//script.google.com">
-<link rel="stylesheet" href="style.css?v=11.0.12">
-<title>CUATUNG LIGHTING – QUẢN LÝ CHẤM CÔNG V11.0.12</title>
+<title>Quản lý thu chi – Thuỳ Linh</title>
+<link rel="icon" href="assets/images/branding/favicon.png">
+<link rel="apple-touch-icon" href="assets/images/branding/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">
-    <img src="assets/logo.png" alt="Cuatung Lighting">
-    <div class="brand-copy"><b>CUATUNG LIGHTING</b><span>QUẢN LÝ CHẤM CÔNG</span></div>
-  </div>
-  <div class="topbar-actions"><div class="online ready" id="netState">SẴN SÀNG</div><button id="topReset" class="top-reset hidden" type="button" aria-label="Tải lại và đồng bộ" title="Tải lại và đồng bộ" onclick="resetAndSync()">↻</button><button id="topPower" class="top-power hidden" type="button" aria-label="Đăng xuất" onclick="requestLogout()">⏻</button></div>
-</header>
-<main id="app">
-<section class="screen wrap login-screen">
-  <div class="login">
-    <img class="login-logo" src="assets/logo.png" alt="Cuatung Lighting">
-    <div class="login-heading">
-      <h1 class="title">QUẢN LÝ CHẤM CÔNG</h1>
-      <div class="company-name">Cuatung Lighting</div>
-    </div>
-    <form id="bootForm">
-      <div class="field"><label>Số điện thoại</label><input id="bootPhone" inputmode="tel" autocomplete="username" required></div>
-      <div class="field"><label>Mật khẩu</label><input id="bootPassword" type="password" autocomplete="current-password" required></div>
-      <button class="btn primary full" type="submit">ĐĂNG NHẬP</button>
-      <p id="bootStatus" class="helper">Sẵn sàng đăng nhập</p>
+
+<!-- ============ ĐĂNG NHẬP ============ -->
+<section id="loginView" class="login-wrap">
+  <div class="login card">
+    <img class="login-logo" src="assets/images/branding/logo-mark.png" alt="Logo Thuỳ Linh" width="96" height="87">
+    <div class="eyebrow">HỆ THỐNG QUẢN LÝ</div>
+    <h1>Đăng nhập</h1>
+    <p class="muted">Quản lý thu, chi và khách hàng tập trung.</p>
+    <form id="loginForm" autocomplete="on">
+      <label><span>Số điện thoại</span>
+        <input id="phone" type="tel" inputmode="tel" autocomplete="username" autocapitalize="none" required>
+      </label>
+      <label><span>Mật khẩu</span>
+        <div class="pw"><input id="password" type="password" autocomplete="current-password" required><button type="button" class="eye" data-eye aria-label="Hiện mật khẩu" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button></div>
+      </label>
+      <button class="btn primary full" id="loginBtn">Đăng nhập</button>
+      <p id="loginMsg" class="message" role="alert"></p>
     </form>
+    <p id="apiWarn" class="message error hidden"></p>
   </div>
 </section>
-</main>
-<div id="toast" class="toast"></div>
-<div id="modal" class="modal hidden"><div class="modal-card"><h3 id="modalTitle">Xác nhận</h3><p id="modalText"></p><div class="actions"><button class="btn light" id="modalCancel">HỦY</button><button class="btn primary" id="modalOk">TIẾP TỤC</button></div></div></div>
-<script src="config.js?v=11.0.12"></script>
-<script src="app.js?v=11.0.12"></script>
+
+<!-- ============ ỨNG DỤNG ============ -->
+<div id="appView" class="hidden">
+  <header class="topbar">
+    <button id="backBtn" class="back-btn hidden" type="button" aria-label="Quay lại"><span aria-hidden="true">‹</span> Quay lại</button>
+    <div class="brand" id="brand">
+      <img src="assets/images/branding/logo-mark.png" alt="" width="40" height="36">
+      <div><b>QUẢN LÝ THU CHI</b><small>THUỲ LINH</small></div>
+    </div>
+    <div class="top-title hidden" id="topTitle"></div>
+    <div class="who" id="who"><span id="userName">—</span><small id="userRole"></small></div>
+  </header>
+
+  <main>
+    <!-- ===== TRANG CHỦ: chọn chức năng ===== -->
+    <section id="scr-home" class="screen">
+      <div class="banner">
+        <img class="avatar" src="assets/images/avatars/avatar-user.jpg" alt="Ảnh đại diện" width="56" height="56">
+        <div class="eyebrow">TỔNG QUAN HÔM NAY</div>
+        <div class="banner-date" id="homePeriod"></div>
+        <h2>Xin chào, <span id="helloName">bạn</span></h2>
+      </div>
+      <div class="seg wide method-switch" id="methodSwitch" role="group" aria-label="Hình thức thanh toán">
+        <button type="button" data-method="cash" class="active">Tiền mặt</button>
+        <button type="button" data-method="bank">Chuyển khoản</button>
+      </div>
+      <div class="stats">
+        <article class="stat income"><span id="lblThu">TỔNG THU · TIỀN MẶT</span><strong id="totalThu">0 ₫</strong><small id="countThu"></small></article>
+        <article class="stat expense"><span id="lblChi">TỔNG CHI · TIỀN MẶT</span><strong id="totalChi">0 ₫</strong><small id="countChi"></small></article>
+        <article class="stat balance"><span id="lblBal">CHÊNH LỆCH · TIỀN MẶT</span><strong id="balance">0 ₫</strong></article>
+      </div>
+      <nav class="tiles" aria-label="Chức năng">
+        <button class="tile t-income" data-go="add" data-type="THU"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><b>Ghi thu</b></button>
+        <button class="tile t-expense" data-go="add" data-type="CHI"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/></svg><b>Ghi chi</b></button>
+        <button class="tile" data-go="filter" data-mode="search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><b>Tìm kiếm</b></button>
+        <button class="tile" data-go="filter" data-mode="report"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><b>Báo cáo</b></button>
+        <button class="tile" data-go="customers"><svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6M16 4.5a3.5 3.5 0 010 7M18 14.5c2 .6 3.3 2.4 3.5 5.5"/></svg><b>Khách hàng</b></button>
+        <button class="tile t-collect" data-go="collect"><svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h9"/></svg><b>Đã thu / Chưa thu</b></button>
+        <button class="tile" data-go="loans"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v18M16.5 7.5C15.7 6.6 14.1 6 12 6c-2.5 0-4 1-4 2.6 0 4.2 8.5 1.8 8.5 6.2 0 1.7-1.7 2.7-4.5 2.7-2.2 0-3.9-.7-4.8-1.7"/></svg><b>Khách vay</b></button>
+      </nav>
+      <div class="mini-actions" aria-label="Tài khoản">
+        <button type="button" class="mini admin-only hidden" data-go="users">Tài khoản</button>
+        <button type="button" class="mini" id="changePwBtn">Đổi mật khẩu</button>
+        <button type="button" class="mini danger" id="logoutBtn">Đăng xuất</button>
+      </div>
+      <p class="muted small center" id="versionInfo"></p>
+    </section>
+
+    <!-- ===== GHI THU / GHI CHI ===== -->
+    <section id="scr-add" class="screen hidden">
+      <div class="card">
+        <form id="txForm" class="form" autocomplete="off">
+          <div class="field"><span class="lbl">Ngày giao dịch (âm lịch)</span><input type="hidden" id="txDate"></div>
+          <div class="field"><span class="lbl">Khách hàng <b class="req">*</b></span><div id="pickAdd"></div></div>
+          <button type="button" class="btn ghost small" id="quickCustomer">＋ Thêm khách hàng mới</button>
+          <label><span>Mục đích</span><select id="purposeSel"></select></label>
+          <label id="purposeOtherWrap" class="hidden"><span>Nội dung khác <b class="req">*</b></span><input id="purpose" maxlength="200" placeholder="Tự điền nội dung"></label>
+          <label><span>Số tiền (VND) <b class="req">*</b></span>
+            <input id="amount" type="text" inputmode="numeric" placeholder="0" required>
+            <span class="words" id="amountWords"></span>
+          </label>
+          <label><span>Phương thức</span><select id="method"></select></label>
+          <label><span>Ghi chú</span><input id="note" maxlength="500"></label>
+          <button class="btn primary full" id="txSave">Lưu giao dịch</button>
+          <p id="txMsg" class="message" role="alert"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== BỘ LỌC TÌM KIẾM / BÁO CÁO (dùng chung) ===== -->
+    <section id="scr-filter" class="screen hidden">
+      <div class="card">
+        <div class="form">
+          <div class="field"><span class="lbl">Tìm theo</span>
+            <div class="seg wide" id="periodSwitch">
+              <button type="button" class="active" data-period="NGAY">Ngày</button>
+              <button type="button" data-period="THANG">Tháng</button>
+              <button type="button" data-period="NAM">Năm</button>
+            </div>
+          </div>
+          <div class="field" id="fDateWrap"><span class="lbl">Ngày (âm lịch)</span><input type="hidden" id="fDate"></div>
+          <div class="row2 hidden" id="fMonthYear">
+            <label id="fMonthWrap"><span>Tháng (âm lịch)</span><select id="fMonth"></select></label>
+            <label><span>Năm (âm lịch)</span><select id="fYear"></select></label>
+          </div>
+          <div class="field"><span class="lbl">Khách hàng</span><div id="pickFilter"></div></div>
+          <div class="field"><span class="lbl">Loại</span>
+            <div class="seg wide" id="fTypeSwitch">
+              <button type="button" class="active" data-ftype="THU">THU</button>
+              <button type="button" data-ftype="CHI">CHI</button>
+            </div>
+          </div>
+          <button class="btn primary full" id="runFilter">Xem kết quả</button>
+          <p id="filterMsg" class="message" role="alert"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== KẾT QUẢ (lưới như Excel) ===== -->
+    <section id="scr-result" class="screen hidden">
+      <div class="card">
+        <h2 id="resTitle"></h2>
+        <p class="muted" id="resCustomer"></p>
+        <div class="mini-stats">
+          <div class="income"><span>Tổng thu</span><strong id="rThu">0 ₫</strong><small id="rThuN"></small></div>
+          <div class="expense"><span>Tổng chi</span><strong id="rChi">0 ₫</strong><small id="rChiN"></small></div>
+          <div class="balance"><span>Chênh lệch</span><strong id="rBal">0 ₫</strong></div>
+        </div>
+        <div class="seg wide" id="resTypeSwitch">
+          <button type="button" class="active" data-rtype="THU">Chi tiết THU</button>
+          <button type="button" data-rtype="CHI">Chi tiết CHI</button>
+        </div>
+        <p class="muted small" id="resHint"></p>
+        <div class="grid-wrap"><table class="grid" id="grid"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+        <div class="row2 hidden" id="exportBar">
+          <button class="btn primary" id="exportPdf" type="button">Xuất PDF</button>
+          <button class="btn outline" id="exportXlsx" type="button">Xuất Excel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ĐÃ THU / CHƯA THU ===== -->
+    <section id="scr-collect" class="screen hidden">
+      <div class="card">
+        <div class="field" id="cDateWrap"><span class="lbl">Ngày (âm lịch)</span><input type="hidden" id="cDate"></div>
+        <div class="seg wide" id="collectSwitch">
+          <button type="button" class="active" data-cview="paid">Đã thu (0)</button>
+          <button type="button" data-cview="unpaid">Chưa thu (0)</button>
+        </div>
+        <p class="muted small" id="collectHint"></p>
+        <div id="collectList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ===== KHÁCH VAY ===== -->
+    <section id="scr-loans" class="screen hidden">
+      <div class="card">
+        <div class="mini-stats">
+          <div class="income"><span>Đã cho vay</span><strong id="lsVay">0 ₫</strong></div>
+          <div class="expense"><span>Đã trả</span><strong id="lsTra">0 ₫</strong></div>
+          <div class="balance"><span>Dư nợ</span><strong id="lsDebt">0 ₫</strong></div>
+        </div>
+        <div class="row2">
+          <button class="btn primary" data-go="loanadd" data-kind="VAY" type="button">Tạo khoản vay</button>
+          <button class="btn outline" data-go="loanadd" data-kind="TRA" type="button">Trả khoản vay</button>
+          <button class="btn outline" data-go="lfilter" data-mode="search" type="button">Tìm kiếm</button>
+          <button class="btn outline" data-go="lfilter" data-mode="report" type="button">Báo cáo</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-head"><h2>Danh sách khách vay</h2><button class="btn primary small" id="addBorrower" type="button">＋ Thêm</button></div>
+        <p class="muted small">Danh sách này riêng, không liên quan khách hàng thu/chi.</p>
+        <input id="borrowerFilter" type="search" placeholder="Tìm khách vay" class="filter">
+        <div id="borrowerList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- ===== TẠO / TRẢ KHOẢN VAY ===== -->
+    <section id="scr-loanadd" class="screen hidden">
+      <div class="card">
+        <form id="loanForm" class="form" autocomplete="off">
+          <div class="field"><span class="lbl">Ngày (âm lịch)</span><input type="hidden" id="lDate"></div>
+          <label><span>Khách hàng (điền tên) <b class="req">*</b></span>
+            <input id="lName" maxlength="120" placeholder="Điền hoặc chọn tên khách vay" autocomplete="off" required>
+            <div class="suggest hidden" id="lSuggest" role="listbox"></div>
+            <span class="words" id="lHint"></span>
+          </label>
+          <label id="lPhoneWrap"><span>Số điện thoại khách mới (không bắt buộc)</span><input id="lPhone" type="tel" inputmode="tel"></label>
+          <label><span>Số tiền (VND) <b class="req">*</b></span>
+            <input id="lAmount" type="text" inputmode="numeric" placeholder="0" required>
+            <span class="words" id="lWords"></span>
+          </label>
+          <label><span>Ghi chú</span><input id="lNote" maxlength="500"></label>
+          <button class="btn primary full" id="lSave">Lưu</button>
+          <p id="lMsg" class="message" role="alert"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== TÌM KIẾM / BÁO CÁO KHOẢN VAY ===== -->
+    <section id="scr-lfilter" class="screen hidden">
+      <div class="card">
+        <div class="form">
+          <div class="field"><span class="lbl">Tìm theo</span>
+            <div class="seg wide" id="lPeriodSwitch">
+              <button type="button" class="active" data-period="NGAY">Ngày</button>
+              <button type="button" data-period="THANG">Tháng</button>
+              <button type="button" data-period="NAM">Năm</button>
+            </div>
+          </div>
+          <div class="field" id="lDateWrap"><span class="lbl">Ngày (âm lịch)</span><input type="hidden" id="lFDate"></div>
+          <div class="row2 hidden" id="lMonthYear">
+            <label id="lMonthWrap"><span>Tháng (âm lịch)</span><select id="lFMonth"></select></label>
+            <label><span>Năm (âm lịch)</span><select id="lFYear"></select></label>
+          </div>
+          <label><span>Khách vay</span><select id="lFBorrower"></select></label>
+          <div class="field"><span class="lbl">Loại</span>
+            <div class="seg wide" id="lTypeSwitch">
+              <button type="button" class="active" data-ltype="VAY">Cho vay</button>
+              <button type="button" data-ltype="TRA">Trả nợ</button>
+            </div>
+          </div>
+          <button class="btn primary full" id="lRun">Xem kết quả</button>
+          <p id="lFMsg" class="message" role="alert"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="scr-lresult" class="screen hidden">
+      <div class="card">
+        <h2 id="lResTitle"></h2>
+        <p class="muted" id="lResCustomer"></p>
+        <div class="mini-stats">
+          <div class="income"><span>Cho vay</span><strong id="lrVay">0 ₫</strong><small id="lrVayN"></small></div>
+          <div class="expense"><span>Đã trả</span><strong id="lrTra">0 ₫</strong><small id="lrTraN"></small></div>
+          <div class="balance"><span>Dư nợ cuối kỳ</span><strong id="lrDebt">0 ₫</strong></div>
+        </div>
+        <div class="seg wide" id="lResType">
+          <button type="button" class="active" data-ltype="VAY">Chi tiết cho vay</button>
+          <button type="button" data-ltype="TRA">Chi tiết trả nợ</button>
+        </div>
+        <p class="muted small" id="lResHint"></p>
+        <div class="grid-wrap"><table class="grid" id="lgrid"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+      </div>
+    </section>
+
+    <!-- ===== KHÁCH HÀNG ===== -->
+    <section id="scr-customers" class="screen hidden">
+      <div class="card">
+        <div class="section-head"><h2>Danh sách khách hàng</h2><button class="btn primary small" id="addCustomer" type="button">＋ Thêm</button></div>
+        <input id="customerFilter" type="search" placeholder="Tìm khách hàng" class="filter">
+        <div id="customerList" class="list"></div>
+        <button class="btn outline full hidden" id="moreCustomers" type="button">Xem thêm</button>
+      </div>
+    </section>
+
+    <!-- ===== TÀI KHOẢN ===== -->
+    <section id="scr-users" class="screen hidden">
+      <div class="card">
+        <div class="section-head"><h2>Tài khoản</h2><button class="btn primary small" id="addUser" type="button">＋ Thêm</button></div>
+        <div id="userList" class="list"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ HỘP THOẠI ============ -->
+<dialog id="customerDialog">
+  <form id="customerForm" class="form">
+    <h2 id="customerTitle">Khách hàng mới</h2>
+    <input type="hidden" id="customerId">
+    <label><span>Họ tên <b class="req">*</b></span><input id="newName" maxlength="120" required></label>
+    <label><span>Số điện thoại (không bắt buộc)</span><input id="newPhone" type="tel" inputmode="tel"></label>
+    <label><span>Địa chỉ (không bắt buộc)</span><input id="newAddress" maxlength="250"></label>
+    <label><span>Ghi chú</span><input id="newNote" maxlength="500"></label>
+    <button class="btn primary full">Lưu khách hàng</button>
+    <button type="button" class="btn danger full hidden" id="deleteCustomerBtn">Xóa khách hàng</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+    <p id="customerMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="borrowerDialog">
+  <form id="borrowerForm" class="form">
+    <h2 id="borrowerTitle">Khách vay mới</h2>
+    <input type="hidden" id="borrowerId">
+    <label><span>Họ tên <b class="req">*</b></span><input id="bName" maxlength="120" required></label>
+    <label><span>Số điện thoại (không bắt buộc)</span><input id="bPhone" type="tel" inputmode="tel"></label>
+    <label><span>Địa chỉ (không bắt buộc)</span><input id="bAddress" maxlength="250"></label>
+    <label><span>Ghi chú</span><input id="bNote" maxlength="500"></label>
+    <button class="btn primary full">Lưu khách vay</button>
+    <button type="button" class="btn danger full hidden" id="deleteBorrowerBtn">Xóa khách vay</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+    <p id="borrowerMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="loanTxDialog">
+  <form class="form" onsubmit="return false">
+    <h2>Giao dịch vay</h2>
+    <p id="loanTxInfo" class="muted"></p>
+    <input type="hidden" id="loanTxId">
+    <button type="button" class="btn danger full" id="cancelLoanBtn">Hủy giao dịch này</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+    <p id="loanTxMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="passwordDialog">
+  <form id="passwordForm" class="form">
+    <h2 id="passwordTitle">Đổi mật khẩu</h2>
+    <p class="muted small hidden" id="passwordForced">Tài khoản của bạn cần đổi mật khẩu trước khi tiếp tục.</p>
+    <label><span>Mật khẩu hiện tại</span>
+      <div class="pw"><input id="oldPassword" type="password" autocomplete="current-password" required><button type="button" class="eye" data-eye aria-label="Hiện mật khẩu" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button></div>
+    </label>
+    <label><span>Mật khẩu mới (tối thiểu 8 ký tự)</span>
+      <div class="pw"><input id="newPasswordInput" type="password" autocomplete="new-password" minlength="8" required><button type="button" class="eye" data-eye aria-label="Hiện mật khẩu" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button></div>
+    </label>
+    <button class="btn primary full">Đổi mật khẩu</button>
+    <button type="button" class="btn ghost full" id="passwordCancel" data-close>Đóng</button>
+    <p id="passwordMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="editDialog">
+  <form id="editForm" class="form">
+    <h2>Sửa giao dịch</h2>
+    <input type="hidden" id="editId"><input type="hidden" id="editType">
+    <div class="field"><span class="lbl">Ngày (âm lịch)</span><input type="hidden" id="editDate"></div>
+    <label><span>Mục đích</span><input id="editPurpose" maxlength="200" required></label>
+    <label><span>Nhóm</span><select id="editGroup"></select></label>
+    <label><span>Số tiền (VND)</span><input id="editAmount" type="text" inputmode="numeric" required></label>
+    <label><span>Phương thức</span><select id="editMethod"></select></label>
+    <label><span>Ghi chú</span><input id="editNote" maxlength="500"></label>
+    <button class="btn primary full">Lưu thay đổi</button>
+    <button type="button" class="btn danger full" id="cancelTxBtn">Hủy giao dịch này</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+    <p id="editMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="userDialog">
+  <form id="userForm" class="form">
+    <h2 id="userTitle">Tài khoản mới</h2>
+    <input type="hidden" id="uEditing">
+    <label><span>Số điện thoại</span><input id="uPhone" type="tel" inputmode="tel" required></label>
+    <label><span>Họ tên</span><input id="uName" maxlength="80" required></label>
+    <label><span>Vai trò</span><select id="uRole"><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label>
+    <button class="btn primary full" id="userSubmit">Tạo tài khoản</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+    <p id="userMsg" class="message" role="alert"></p>
+  </form>
+</dialog>
+
+<dialog id="saveDialog">
+  <div class="form">
+    <h2>File đã sẵn sàng</h2>
+    <p id="saveName" class="file-name"></p>
+    <p class="muted small" id="saveHint">Bấm “Lưu về máy” để chọn nơi lưu. Trên iPhone, chọn “Lưu vào Tệp”.</p>
+    <button type="button" class="btn primary full" id="saveBtn">Lưu về máy</button>
+    <button type="button" class="btn outline full" id="viewBtn">Xem file</button>
+    <button type="button" class="btn ghost full" data-close>Đóng</button>
+  </div>
+</dialog>
+
+<dialog id="infoDialog">
+  <div class="form">
+    <h2 id="infoTitle"></h2>
+    <p id="infoBody" class="pre"></p>
+    <button class="btn primary full" data-close>Đã hiểu</button>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+<div id="busy" class="busy hidden"><div class="spinner"></div></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/lunar.js"></script>
+<script src="assets/js/app.js"></script>
 </body>
 </html>
