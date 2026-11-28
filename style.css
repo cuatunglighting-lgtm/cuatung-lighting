@@ -281,3 +281,19 @@ input[type=date]::-webkit-date-and-time-value,input[type=month]::-webkit-date-an
 .push-banner.install{background:#fff7e6;color:#7a4a00}.ib-x{background:none;border:0;font-size:18px;color:inherit;padding:4px 6px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 #modalText{white-space:pre-line}
+
+/* V11.0.13 compact admin home */
+.admin-home .home-head{margin-bottom:12px}
+.act-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.act-card{display:flex;align-items:center;gap:10px;background:#fff;border:0;border-radius:18px;padding:14px 12px;box-shadow:var(--shadow);text-align:left;color:var(--text);min-height:76px}
+.act-card.hot{box-shadow:0 0 0 2px #f6c4c4 inset,var(--shadow);background:#fff8f8}
+.act-ico{font-size:24px;line-height:1}.act-txt{flex:1;min-width:0}.act-txt b{display:block;font-size:14.5px;letter-spacing:.2px}.act-txt small{display:block;color:var(--muted);font-size:12px;font-weight:700;margin-top:2px}
+.act-num{font-size:26px;font-weight:900;color:#9aa9bb;min-width:28px;text-align:right}.act-card.hot .act-num{color:var(--red)}
+.qgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.qtile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#fff;border:0;border-radius:16px;padding:14px 6px;min-height:88px;box-shadow:0 1px 4px rgba(18,55,95,.08);color:var(--text)}
+.qtile:active,.act-card:active{transform:scale(.97)}
+.qi{font-size:26px;line-height:1}.qt{font-size:12.5px;font-weight:900;letter-spacing:.2px;text-align:center;line-height:1.2}
+.qtile .menu-badge{top:6px;right:6px;min-width:22px;height:22px;font-size:12px}
+.admin-home .menu-group{margin:18px 4px 8px}
+@media (min-width:760px){.qgrid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.act-card{gap:8px;padding:12px 10px}.act-ico{font-size:22px}.act-txt b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.act-txt small{font-size:11.5px}.act-num{font-size:24px;min-width:22px}

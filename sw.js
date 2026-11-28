@@ -1,7 +1,7 @@
 // V11.0.6 service worker: network-first with a 2.5 s fallback to cache, so a weak signal at the site never stalls app start.
 // OneSignal push handlers live in this same worker (one worker per scope; a second root worker would replace this one).
 try{importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js')}catch(e){}
-const CACHE='cuatung-lighting-v11.0.12-shell';
+const CACHE='cuatung-lighting-v11.0.13-shell';
 const ASSETS=['./','./index.html','./style.css','./app.js','./config.js','./manifest.json','./assets/logo.png','./assets/icon-192x192.png','./assets/icon-512x512.png','./assets/apple-touch-icon.png','./assets/favicon-32.png','./assets/icon-maskable-192x192.png','./assets/icon-maskable-512x512.png','./assets/icon-32x32.png','./assets/icon-96x96.png'];
 const NET_TIMEOUT_MS=2500;
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
